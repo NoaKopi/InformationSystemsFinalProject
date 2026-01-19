@@ -1,27 +1,4 @@
--- =========================================================
--- SQLITE VERSION (copy-paste)
--- =========================================================
-PRAGMA foreign_keys = ON;
 
--- אם את מריצה שוב ושוב, נוח להפיל טבלאות במקום DROP DATABASE
-DROP TABLE IF EXISTS Defines;
-DROP TABLE IF EXISTS Has_an_order;
-DROP TABLE IF EXISTS Flight_Attendants_Assigned_To_Flights;
-DROP TABLE IF EXISTS Pilots_Scheduled_to_Flights;
-DROP TABLE IF EXISTS Unidentified_Guests_Phone_Numbers;
-DROP TABLE IF EXISTS Registered_Clients_Phone_Numbers;
-DROP TABLE IF EXISTS Selected_Seats;
-DROP TABLE IF EXISTS Seats;
-DROP TABLE IF EXISTS Orders;
-DROP TABLE IF EXISTS Flight;
-DROP TABLE IF EXISTS Routes;
-DROP TABLE IF EXISTS Managers;
-DROP TABLE IF EXISTS Flight_Attendants;
-DROP TABLE IF EXISTS Pilots;
-DROP TABLE IF EXISTS Registered_Clients;
-DROP TABLE IF EXISTS Unidentified_Guests;
-DROP TABLE IF EXISTS Planes;
-DROP TABLE IF EXISTS Airports;
 
 -- =========================================================
 -- 1) Airports
