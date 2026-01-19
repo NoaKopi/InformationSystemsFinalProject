@@ -1,0 +1,29 @@
+{% extends "admin_base.html" %}
+{% block title %}Review New Flight{% endblock %}
+
+{% block content %}
+  <h1>Review New Flight</h1>
+  <p class="subtitle">Confirm the details below</p>
+
+  <div class="table-card">
+    <ul style="margin:0; padding-left:18px;">
+      <li><b>Origin:</b> {{ draft.origin_id }}</li>
+      <li><b>Destination:</b> {{ draft.dest_id }}</li>
+      <li><b>Departure:</b> {{ draft.dep_date }} {{ draft.dep_time }}</li>
+      <li><b>Duration (min):</b> {{ draft.duration }}</li>
+      <li><b>Plane:</b> {{ draft.plane_id }} ({{ draft.plane_size }})</li>
+      <li><b>Economy Price:</b> {{ draft.economy_price }}</li>
+      <li><b>Business Price:</b> {{ draft.business_price }}</li>
+      <li><b>Pilots:</b> {{ draft.selected_pilots|join(', ') }}</li>
+      <li><b>Attendants:</b> {{ draft.selected_attendants|join(', ') }}</li>
+      <li><b>Flight Status:</b> active</li>
+    </ul>
+
+    <div class="cta-row" style="margin-top:14px;">
+      <form method="POST" action="{{ url_for('admin_new_flight_review') }}" style="margin:0;">
+        <button class="btn btn-primary" type="submit">Confirm</button>
+      </form>
+      <a class="btn btn-secondary" href="{{ url_for('admin_new_flight_step2') }}">Back</a>
+    </div>
+  </div>
+{% endblock %}

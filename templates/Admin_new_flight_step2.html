@@ -1,0 +1,66 @@
+{% extends "admin_base.html" %}
+{% block title %}Add New Flight - Step 2{% endblock %}
+
+{% block content %}
+  <h1>Add New Flight</h1>
+  <p class="subtitle">Step 2: Select plane, prices and staff</p>
+
+  <div class="search-card">
+    <p class="helper-text" style="margin:0;">
+      Route: <b>{{ draft.origin_id }}</b> → <b>{{ draft.dest_id }}</b> |
+      Departure: <b>{{ draft.dep_date }}</b> <b>{{ draft.dep_time }}</b> |
+      Duration: <b>{{ draft.duration }}</b> min |
+      Long flight: <b>{{ 'YES' if draft.is_long else 'NO' }}</b>
+    </p>
+  </div>
+
+  <div class="table-card" style="margin-top:14px;">
+    <form class="form" method="POST" action="{{ url_for('admin_new_flight_step2') }}">
+
+      <label>Select Plane</label>
+      <select name="plane_id" required>
+        <option value="">Select...</option>
+        {% for p in planes %}
+          <option value="{{ p['Plane_ID'] }}">
+            {{ p['Plane_ID'] }} ({{ p['SizeLabel']|upper }})
+          </option>
+        {% endfor %}
+      </select>
+
+
+      <label>Economy Price</label>
+      <input type="number" step="0.01" name="economy_price" required>
+
+      <label>Business Price (required only for large plane)</label>
+      <input type="number" step="0.01" name="business_price">
+
+      <hr style="border:none;border-top:1px solid rgba(11,27,43,.10);margin:10px 0;">
+
+      <label>Select Pilots</label>
+      <div class="search-card" style="margin:0;">
+        {% for w in pilots %}
+          <label class="role-option" style="margin:0;">
+            <input type="checkbox" name="pilots" value="{{ w['Worker_ID'] }}">
+            {{ w['Worker_ID'] }} (qualified={{ w['Is_Qualified'] }})
+          </label>
+        {% endfor %}
+      </div>
+
+      <label style="margin-top:14px;">Select Flight Attendants</label>
+      <div class="search-card" style="margin:0;">
+        {% for w in attendants %}
+          <label class="role-option" style="margin:0;">
+            <input type="checkbox" name="attendants" value="{{ w['Worker_ID'] }}">
+            {{ w['Worker_ID'] }} (qualified={{ w['Is_Qualified'] }})
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="cta-row" style="margin-top:14px;">
+        <button class="btn btn-primary" type="submit">Review</button>
+        <a class="btn btn-secondary" href="{{ url_for('admin_new_flight_step1') }}">Back</a>
+      </div>
+
+    </form>
+  </div>
+{% endblock %}

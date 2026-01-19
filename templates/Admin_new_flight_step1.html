@@ -1,0 +1,51 @@
+{% extends "admin_base.html" %}
+{% block title %}Add New Flight - Step 1{% endblock %}
+
+{% block content %}
+  <h1>Add New Flight</h1>
+  <p class="subtitle">Step 1: Choose route and departure date/time</p>
+
+  <div class="search-card">
+    <form class="search-grid" method="POST" action="{{ url_for('admin_new_flight_step1') }}">
+
+      <div class="field">
+        <label>Origin</label>
+        <select name="origin_id" required>
+          <option value="">Select...</option>
+          {% for a in airports %}
+            <option value="{{ a.Airport_ID }}">{{ a.Country }} - {{ a.City }} ({{ a.Airport_Name }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Destination</label>
+        <select name="destination_id" required>
+          <option value="">Select...</option>
+          {% for a in airports %}
+            <option value="{{ a.Airport_ID }}">{{ a.Country }} - {{ a.City }} ({{ a.Airport_Name }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Departure date</label>
+        <input type="date" name="departure_date" required>
+      </div>
+
+      <div class="field">
+        <label>Departure time</label>
+        <input type="time" name="departure_time" required>
+      </div>
+
+      <div class="field field--button">
+        <button class="btn btn-primary search-btn" type="submit">Next</button>
+      </div>
+
+    </form>
+  </div>
+
+  <div class="cta-row" style="margin-top:14px;">
+    <a class="btn btn-secondary" href="{{ url_for('admin_dashboard') }}">Back</a>
+  </div>
+{% endblock %}

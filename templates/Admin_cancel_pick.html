@@ -1,0 +1,59 @@
+{% extends "admin_base.html" %}
+{% block title %}Cancel Flight{% endblock %}
+
+{% block content %}
+  <h1>Cancel Flight</h1>
+  <p class="subtitle">Pick a flight to cancel (not allowed within 72 hours)</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="table-card">
+    <div class="table-wrap">
+      <table class="flights-table">
+        <thead>
+          <tr>
+            <th>Flight ID</th>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Status</th>
+            <th>Open</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in flights %}
+          <tr>
+            <td class="cell-title">{{ f.Flight_ID }}</td>
+            <td>{{ f.Departure_Date }}</td>
+            <td>{{ f.Departure_Time }}</td>
+            <td><span class="badge">{{ f.Flight_Status }}</span></td>
+            <td>
+              {% if f.can_cancel %}
+                <a class="btn btn-secondary btn-small"
+                   href="{{ url_for('admin_cancel_flight_confirm', flight_id=f.Flight_ID) }}">
+                  Open
+                </a>
+              {% else %}
+                <span class="badge" style="opacity:.65;">Locked (72h)</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+
+          {% if flights|length == 0 %}
+            <tr><td class="empty" colspan="5">No flights available.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="cta-row" style="margin-top:14px;">
+      <a class="btn btn-secondary" href="{{ url_for('admin_dashboard') }}">Back</a>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book Flight | FLYTAU</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+  {% include "topbar.html" %}
+
+  <main class="hero">
+    <section class="hero-card hero-card--wide">
+
+      <h1>Book Flight #{{ flight.Flight_ID }}</h1>
+      <p class="subtitle">
+        {{ flight.origin_airport_name }} ({{ flight.origin_city }}, {{ flight.origin_country }})
+        → {{ flight.dest_airport_name }} ({{ flight.dest_city }}, {{ flight.dest_country }})
+      </p>
+
+      {% if has_business is defined and not has_business %}
+        <div class="alert info" style="margin-top:10px;">
+          This flight operates with an Economy-only plane.
+        </div>
+      {% endif %}
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert {{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <div class="table-card">
+        <div class="table-wrap">
+          <table class="flights-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Selected class</th>
+                <th>Price (per ticket)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{{ flight.Departure_Date }}</td>
+                <td>{{ flight.Departure_Time }}</td>
+                <td><b>{{ selected_class }}</b></td>
+                <td><b>${{ "%.2f"|format(unit_price) }}</b></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="search-card" style="margin-top:16px;">
+        <form method="POST"
+              action="{{ url_for('book_flight', flight_id=flight.Flight_ID) }}"
+              class="search-form">
+
+          <input type="hidden" name="class" value="{{ selected_class }}">
+
+          <div class="search-grid">
+
+            {% if user_is_registered %}
+              <div class="field">
+                <label>Email</label>
+                <input type="text" value="{{ session.get('Email_Address', '') }}" disabled>
+              </div>
+
+              <div class="field">
+                <label>Full name</label>
+                <input type="text"
+                       value="{{ session.get('First_Name_In_English', '') }} {{ session.get('Last_Name_In_English', '') }}"
+                       disabled>
+              </div>
+            {% endif %}
+
+            <div class="field">
+              <label for="quantity">Number of tickets</label>
+              <input id="quantity" name="quantity" type="number" min="1" value="1" required>
+            </div>
+
+            {% if not user_is_registered %}
+              <div class="field">
+                <label for="guest_email">Guest Email</label>
+                <input id="guest_email" name="guest_email" type="email" required>
+              </div>
+
+              <div class="field">
+                <label for="guest_first_name">First name</label>
+                <input id="guest_first_name" name="guest_first_name" type="text" required>
+              </div>
+
+              <div class="field">
+                <label for="guest_last_name">Last name</label>
+                <input id="guest_last_name" name="guest_last_name" type="text" required>
+              </div>
+            {% endif %}
+
+            <div class="field field--button">
+              <button type="submit" class="btn btn-primary search-btn">
+                Continue to Seat Selection
+              </button>
+            </div>
+
+          </div>
+        </form>
+      </div>
+
+      <div class="cta-row cta-row--below">
+        <a class="btn btn-secondary" href="{{ url_for('home_page') }}">Back to Search</a>
+      </div>
+
+    </section>
+  </main>
+</body>
+</html>

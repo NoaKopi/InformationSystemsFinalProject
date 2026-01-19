@@ -1,0 +1,54 @@
+{% extends "admin_base.html" %}
+{% block title %}Add Staff Member{% endblock %}
+
+{% block content %}
+  <h1>Add Staff Member</h1>
+  <p class="subtitle">Add pilot or flight attendant</p>
+
+  <div class="table-card">
+    <form class="form" method="POST" action="{{ url_for('admin_add_staff') }}">
+
+      <label>Staff type</label>
+      <select name="staff_type" required>
+        <option value="">Select...</option>
+        <option value="pilot">Pilot</option>
+        <option value="attendant">Flight Attendant</option>
+      </select>
+
+      <label>Worker ID</label>
+      <input type="text" name="worker_id" required>
+
+      <label>City</label>
+      <input type="text" name="city" required>
+
+      <label>Street</label>
+      <input type="text" name="street" required>
+
+      <label>House Number</label>
+      <input type="text" name="house_number" required>
+
+      <label>First Name (Hebrew)</label>
+      <input type="text" name="first_he" required>
+
+      <label>Last Name (Hebrew)</label>
+      <input type="text" name="last_he" required>
+
+      <label>Phone Number</label>
+      <input type="text" name="phone" required>
+
+      <label>Start Date</label>
+      <input type="date" name="start_date" required>
+
+      <label>
+        <input type="checkbox" name="is_qualified">
+        Is Qualified (check if yes)
+      </label>
+
+      <div class="cta-row" style="margin-top:14px;">
+        <button class="btn btn-primary-blue" type="submit">Add</button>
+        <a class="btn btn-secondary" href="{{ url_for('admin_dashboard') }}">Back</a>
+      </div>
+
+    </form>
+  </div>
+{% endblock %}

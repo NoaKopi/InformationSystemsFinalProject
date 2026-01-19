@@ -1,0 +1,112 @@
+{% extends "admin_base.html" %}
+{% block title %}Admin Flight Board{% endblock %}
+
+{% block content %}
+  <h1>Admin Flight Board</h1>
+
+  <div class="search-card" style="margin-top:18px;">
+    <form class="search-grid search-grid--two-dates" method="GET" action="{{ url_for('admin_flights') }}">
+
+      <div class="field">
+        <label>Origin</label>
+        <select name="origin_id">
+          <option value="">Any</option>
+          {% for a in airports %}
+            <option value="{{ a.Airport_ID }}" {% if origin_id == (a.Airport_ID|string) %}selected{% endif %}>
+              {{ a.Country }} - {{ a.City }} ({{ a.Airport_Name }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Destination</label>
+        <select name="destination_id">
+          <option value="">Any</option>
+          {% for a in airports %}
+            <option value="{{ a.Airport_ID }}" {% if destination_id == (a.Airport_ID|string) %}selected{% endif %}>
+              {{ a.Country }} - {{ a.City }} ({{ a.Airport_Name }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Start date</label>
+        <input type="date" name="start_date" value="{{ start_date or '' }}">
+      </div>
+
+      <div class="field">
+        <label>End date</label>
+        <input type="date" name="end_date" value="{{ end_date or '' }}">
+      </div>
+
+      <div class="field">
+        <label>Status</label>
+        <select name="status">
+          <option value="">Any</option>
+          <option value="active" {% if status == "active" %}selected{% endif %}>active</option>
+          <option value="full" {% if status == "full" %}selected{% endif %}>full</option>
+          <option value="done" {% if status == "done" %}selected{% endif %}>done</option>
+          <option value="cancelled" {% if status == "cancelled" %}selected{% endif %}>cancelled</option>
+        </select>
+      </div>
+
+      <div class="field field--button">
+        <button class="btn btn-primary search-btn" type="submit">Search</button>
+      </div>
+
+    </form>
+  </div>
+
+  <div class="table-card">
+    <div class="table-header">
+      <h3>Results ({{ flights|length }})</h3>
+    </div>
+
+    <div class="table-wrap">
+      <table class="flights-table">
+        <thead>
+          <tr>
+            <th>Flight ID</th>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Plane</th>
+            <th>Origin</th>
+            <th>Destination</th>
+            <th class="th-right">Economy</th>
+            <th class="th-right">Business</th>
+            <th>Status</th>
+            <th>Cancel</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in flights %}
+          <tr>
+            <td class="cell-title">{{ f.Flight_ID }}</td>
+            <td>{{ f.Departure_Date }}</td>
+            <td>{{ f.Departure_Time }}</td>
+            <td>{{ f.Plane_ID }}</td>
+            <td>{{ f.origin_city }} ({{ f.origin_airport_name }})</td>
+            <td>{{ f.dest_city }} ({{ f.dest_airport_name }})</td>
+            <td class="td-right price">{{ f.Economy_Price }}</td>
+            <td class="td-right">{{ f.Business_Price }}</td>
+            <td><span class="badge">{{ f.Flight_Status }}</span></td>
+            <td>
+              {% if f.Flight_Status != 'cancelled' %}
+                <a class="btn btn-secondary btn-small" href="{{ url_for('admin_cancel_flight_confirm', flight_id=f.Flight_ID) }}">Cancel</a>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+
+          {% if flights|length == 0 %}
+            <tr><td class="empty" colspan="10">No flights found.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

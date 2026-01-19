@@ -1,0 +1,29 @@
+{% extends "admin_base.html" %}
+{% block title %}Cancel Flight Confirmation{% endblock %}
+
+{% block content %}
+  <h1>Cancel Flight</h1>
+  <p class="subtitle">Please confirm cancellation</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="table-card">
+    <p><b>Flight ID:</b> {{ flight.Flight_ID }}</p>
+    <p><b>Departure:</b> {{ flight.Departure_Date }} {{ flight.Departure_Time }}</p>
+
+    <div class="cta-row" style="margin-top:14px;">
+      <form method="POST"
+            action="{{ url_for('admin_cancel_flight_confirm', flight_id=flight.Flight_ID) }}"
+            style="margin:0;">
+        <button class="btn btn-primary" type="submit">Yes, Cancel Flight</button>
+      </form>
+      <a class="btn btn-secondary" href="{{ url_for('admin_cancel_flight_pick') }}">No, Go Back</a>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "admin_base.html" %}
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+  <h1>Admin Dashboard</h1>
+  <p class="subtitle">Choose an action:</p>
+
+  <div class="cta-row" style="margin-top:14px;">
+    <a class="btn btn-primary" href="{{ url_for('admin_flights') }}">Search Flight Board</a>
+    <a class="btn btn-secondary" href="{{ url_for('admin_new_flight_step1') }}">Add New Flight</a>
+    <a class="btn btn-secondary" href="{{ url_for('admin_cancel_flight_pick') }}">Cancel Flight</a>
+    <a class="btn btn-secondary" href="{{ url_for('admin_add_staff') }}">Add Staff Member</a>
+    <a class="btn btn-primary" href="{{ url_for('admin_reports') }}">Reports</a>
+  </div>
+{% endblock %}

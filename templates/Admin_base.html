@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Admin{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{{ url_for('admin_dashboard') }}">
+        <span class="brand-name">FLYTAU Admin</span>
+      </a>
+
+      <div class="nav">
+        <a class="nav-link nav-link--admin" href="{{ url_for('admin_flights') }}">Flights</a>
+        <a class="nav-link nav-link--admin" href="{{ url_for('admin_new_flight_step1') }}">Add Flight</a>
+        <a class="nav-link nav-link--admin" href="{{ url_for('admin_cancel_flight_pick') }}">Cancel Flight</a>
+        <a class="nav-link nav-link--admin" href="{{ url_for('admin_add_staff') }}">Add Staff</a>
+        <a class="nav-link nav-link--admin" href="{{ url_for('logout') }}">Logout</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="card" style="width:min(1100px,100%);">
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, msg in messages %}
+            <div class="alert {{ 'success' if category=='success' else 'error' if category=='error' else '' }}">
+              {{ msg }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+
+</body>
+</html>
