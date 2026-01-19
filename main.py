@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime, timedelta
 from contextlib import contextmanager
-import mysql.connector
+import sqlite3
 from decimal import Decimal
 from utils.utils import *
 
@@ -21,6 +21,8 @@ def main():
 # ======================================================
 # DB CONNECTION + CONTEXT MANAGERS
 # ======================================================
+
+
 def get_db_connection():
     return mysql.connector.connect(
         host="localhost",

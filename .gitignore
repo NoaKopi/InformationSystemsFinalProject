@@ -1,0 +1,16 @@
+:w1
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+
+
+^X
+Exit
+
