@@ -10,7 +10,8 @@ app.secret_key = "flytau_project_secret_key_2025!"
 app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=10),  # disconnects after 10 minutes of inactivity
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax",)
+    SESSION_COOKIE_SAMESITE="Lax",
+)
 
 # ======================================================
 # MAIN
@@ -19,16 +20,44 @@ def main():
     app.run(debug=True)
 
 # ======================================================
-# DB CONNECTION + CONTEXT MANAGERS
+# DB CONNECTION + CONTEXT MANAGERS (SQLite)
 # ======================================================
+
+DB_PATH = "/Users/noakopilovich/Documents/python_ex_new/InformationSystem/InformationSystem_Project/FLYTAU15.sql"
+
+
+class DictCursor:
+    """
+    Wrap sqlite cursor so fetchone()/fetchall() return dicts.
+    This keeps your existing code working (row.get(...), etc.)
+    """
+    def __init__(self, cur):
+        self._cur = cur
+
+    def execute(self, sql, params=()):
+        return self._cur.execute(sql, params)
+
+    def executemany(self, sql, seq_of_params):
+        return self._cur.executemany(sql, seq_of_params)
+
+    def fetchone(self):
+        row = self._cur.fetchone()
+        return dict(row) if row is not None else None
+
+    def fetchall(self):
+        rows = self._cur.fetchall()
+        return [dict(r) for r in rows]
+
+    def close(self):
+        return self._cur.close()
 
 
 def get_db_connection():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="NoaKopilo7712!",
-        database="FLYTAU")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    # enforce FK constraints in SQLite (important!)
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
 
 
 @contextmanager
@@ -37,7 +66,8 @@ def db_cursor(dictionary=True):
     cursor = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=dictionary)
+        raw_cursor = conn.cursor()
+        cursor = DictCursor(raw_cursor) if dictionary else raw_cursor
         yield conn, cursor
     finally:
         try:
@@ -118,7 +148,7 @@ def can_cancel(departure_date, departure_time):
 
 def normalize_time_to_hhmmss(value: str) -> str:
     """
-    Normalize time string to 'HH:MM:SS' (MySQL TIME friendly).
+    Normalize time string to 'HH:MM:SS'.
     Accepts 'HH:MM' or 'HH:MM:SS'.
     """
     s = (value or "").strip()
@@ -142,7 +172,7 @@ def plane_has_business(cursor, plane_id: int) -> bool:
         """
         SELECT 1
         FROM Seats
-        WHERE Plane_ID = %s
+        WHERE Plane_ID = ?
           AND LOWER(Class) = 'business'
         LIMIT 1
         """,
@@ -161,7 +191,7 @@ def fetch_flight_prices(flight_id: int):
         cursor.execute("""
             SELECT Economy_Price, Business_Price
             FROM Flight
-            WHERE Flight_ID = %s
+            WHERE Flight_ID = ?
             LIMIT 1
         """, (flight_id,))
         row = cursor.fetchone()
@@ -174,7 +204,7 @@ def fetch_flight_prices(flight_id: int):
 
 
 def infer_order_ticket_class(unique_order_id: int):
-    """ Determines the ticket class ("Economy" or "Business") of an order based on the class of its occupied seats, defaulting to Economy if no valid class is found."""
+    """Determines ticket class ("Economy" or "Business") based on occupied seats, default Economy."""
     with db_cursor() as (_, cursor):
         cursor.execute("""
             SELECT s.Class AS ticket_class
@@ -183,7 +213,7 @@ def infer_order_ticket_class(unique_order_id: int):
               ON s.Plane_ID = ss.Plane_ID
              AND s.Row_Num = ss.Row_Num
              AND s.Column_Number = ss.Column_Number
-            WHERE ss.Unique_Order_ID = %s
+            WHERE ss.Unique_Order_ID = ?
               AND ss.Is_Occupied = 1
             LIMIT 1
         """, (unique_order_id,))
@@ -195,7 +225,7 @@ def infer_order_ticket_class(unique_order_id: int):
 
 
 def compute_order_original_total(unique_order_id: int, flight_id: int, qty: int):
-    """ Calculates the original total price of an order by multiplying the number of tickets by the flight price of the inferred ticket class."""
+    """Calculates original total price: qty * price of inferred class."""
     ticket_class = infer_order_ticket_class(unique_order_id)
     prices = fetch_flight_prices(flight_id)
     price = float(prices.get(ticket_class, 0.0))
@@ -203,7 +233,7 @@ def compute_order_original_total(unique_order_id: int, flight_id: int, qty: int)
 
 
 def compute_display_total(order_status: str, original_total: float):
-    """ Computes the amount to display for an order based on its status, applying full refund for system cancellations, a 5% charge for customer cancellations, or the original total otherwise. """
+    """Full refund for system cancellations, 5% charge for customer cancellations, else original."""
     s = (order_status or "").strip().lower()
     if s == "systemcancellation":
         return 0.0
@@ -225,11 +255,19 @@ def refresh_session_timeout():
 def db_check():
     try:
         with db_cursor() as (_, cursor):
-            cursor.execute("SELECT DATABASE() AS db;")
-            db = cursor.fetchone()["db"]
+            # SQLite doesn't have DATABASE() / SHOW TABLES
+            cursor.execute("PRAGMA database_list;")
+            db_info = cursor.fetchone() or {}
+            db = db_info.get("file") or "main"
 
-            cursor.execute("SHOW TABLES;")
-            tables = [row[f"Tables_in_{db}"] for row in cursor.fetchall()]
+            cursor.execute("""
+                SELECT name
+                FROM sqlite_master
+                WHERE type='table'
+                  AND name NOT LIKE 'sqlite_%'
+                ORDER BY name;
+            """)
+            tables = [row["name"] for row in cursor.fetchall()]
 
             cursor.execute("SELECT COUNT(*) AS cnt FROM Airports;")
             airports_cnt = cursor.fetchone()["cnt"]
@@ -303,7 +341,7 @@ def login():
                 cursor.execute("""
                     SELECT Worker_ID, Manager_Password, Manager_First_Name_In_English
                     FROM Managers
-                    WHERE Worker_ID = %s
+                    WHERE Worker_ID = ?
                 """, (worker_id,))
                 admin = cursor.fetchone()
 
@@ -330,7 +368,7 @@ def login():
                        First_Name_In_English,
                        Last_Name_In_English
                 FROM Registered_Clients
-                WHERE Registered_Clients_Email_Address = %s
+                WHERE Registered_Clients_Email_Address = ?
             """, (email,))
             client = cursor.fetchone()
 
@@ -350,6 +388,7 @@ def login():
         flash(f"Database error: {e}", "error")
         return render_template("login.html")
 
+
 def client_required() -> bool:
     """True if a registered client is logged in."""
     return session.get("user_type") == "registered_client" and bool(session.get("Email_Address"))
@@ -362,6 +401,7 @@ def client_required_or_redirect():
         return False
     return True
 
+
 @app.route("/client_home")
 def client_home():
     if not client_required_or_redirect():
@@ -371,7 +411,8 @@ def client_home():
         "client_home.html",
         first_name=session.get("First_Name_In_English", ""),
         last_name=session.get("Last_Name_In_English", ""),
-        email=session.get("Email_Address", ""))
+        email=session.get("Email_Address", "")
+    )
 
 
 @app.route("/logout")
@@ -410,7 +451,7 @@ def register():
             cursor.execute("""
                 SELECT 1
                 FROM Registered_Clients
-                WHERE Registered_Clients_Email_Address = %s
+                WHERE Registered_Clients_Email_Address = ?
                 LIMIT 1
             """, (email,))
             if cursor.fetchone():
@@ -420,7 +461,7 @@ def register():
             cursor.execute("""
                 SELECT 1
                 FROM Registered_Clients
-                WHERE Passport_ID = %s
+                WHERE Passport_ID = ?
                 LIMIT 1
             """, (passport_id,))
             if cursor.fetchone():
@@ -438,7 +479,7 @@ def register():
                    Client_Password,
                    Registration_Date)
                 VALUES
-                  (%s, %s, %s, %s, %s, %s, CURDATE())
+                  (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """, (passport_id, email, first_name, last_name, birth_date, password))
 
         flash("Account created successfully! Please login.", "success")
@@ -518,28 +559,27 @@ def available_flights():
                 sql += " AND f.Flight_Status = 'active'"
 
             if origin_id:
-                sql += " AND f.Origin_Airport = %s"
+                sql += " AND f.Origin_Airport = ?"
                 params.append(origin_id)
 
             if destination_id:
-                sql += " AND f.Destination_Airport = %s"
+                sql += " AND f.Destination_Airport = ?"
                 params.append(destination_id)
 
             if start_date and end_date:
-                sql += " AND f.Departure_Date BETWEEN %s AND %s"
+                sql += " AND f.Departure_Date BETWEEN ? AND ?"
                 params.extend([start_date, end_date])
             elif start_date:
-                sql += " AND f.Departure_Date >= %s"
+                sql += " AND f.Departure_Date >= ?"
                 params.append(start_date)
             elif end_date:
-                sql += " AND f.Departure_Date <= %s"
+                sql += " AND f.Departure_Date <= ?"
                 params.append(end_date)
 
             sql += " ORDER BY f.Departure_Date, f.Departure_Time"
             cursor.execute(sql, tuple(params))
             flights = cursor.fetchall() or []
 
-            # make sure has_business is boolean-like
             for f in flights:
                 f["has_business"] = bool(f.get("has_business"))
 
@@ -582,7 +622,7 @@ def book_flight(flight_id):
                 FROM Flight f
                 JOIN Airports ao ON ao.Airport_ID = f.Origin_Airport
                 JOIN Airports ad ON ad.Airport_ID = f.Destination_Airport
-                WHERE f.Flight_ID = %s
+                WHERE f.Flight_ID = ?
             """, (flight_id,))
             flight = cursor.fetchone()
 
@@ -607,7 +647,6 @@ def book_flight(flight_id):
             flash("Business class is not available for this flight. Switched to Economy.", "error")
             selected_class = "Economy"
 
-        #  keys are Economy_Price / Business_Price
         unit_price = float(flight["Economy_Price"])
         if selected_class == "Business":
             unit_price = float(flight["Business_Price"])
@@ -642,7 +681,8 @@ def book_flight(flight_id):
             "quantity": int(quantity),
             "ticket_class": selected_class,
             "unit_price": unit_price,
-            "created_at": datetime.now().isoformat()}
+            "created_at": datetime.now().isoformat()
+        }
 
         if is_registered_user():
             draft["user_type"] = "registered_client"
@@ -677,6 +717,7 @@ def book_flight(flight_id):
         flash(f"Database error while loading booking page: {e}", "error")
         return redirect(url_for("available_flights"))
 
+
 # =============================
 # DRAFT: SELECT SEATS
 # =============================
@@ -700,8 +741,8 @@ def draft_select_seats():
             cursor.execute("""
                 SELECT Row_Num, Column_Number, Class
                 FROM Seats
-                WHERE Plane_ID = %s
-                  AND Class = %s
+                WHERE Plane_ID = ?
+                  AND Class = ?
                 ORDER BY Row_Num, Column_Number
             """, (plane_id, ticket_class))
             seats = cursor.fetchall()
@@ -710,8 +751,8 @@ def draft_select_seats():
                 SELECT ss.Row_Num, ss.Column_Number
                 FROM Selected_Seats ss
                 JOIN Orders o ON o.Unique_Order_ID = ss.Unique_Order_ID
-                WHERE o.Flight_ID = %s
-                  AND ss.Plane_ID = %s
+                WHERE o.Flight_ID = ?
+                  AND ss.Plane_ID = ?
                   AND ss.Is_Occupied = 1
                   AND o.Order_Status = 'active'
             """, (flight_id, plane_id))
@@ -743,28 +784,46 @@ def draft_select_seats():
                     return redirect(url_for("draft_select_seats"))
                 parsed.append((row_num, col_part))
 
-            placeholders = ",".join(["(%s,%s)"] * len(parsed))
-            flat_params = []
-            for r, c in parsed:
-                flat_params.extend([r, c])
+            # ---------------------------------------------------------
+            # SQLite note:
+            # SQLite does NOT support (Row_Num, Column_Number) IN ((?,?),(?,?)) reliably.
+            # Minimal safe approach:
+            # 1) fetch candidate seats by row/col sets
+            # 2) validate exact set in Python + validate class
+            # ---------------------------------------------------------
+            rows_list = [r for (r, _) in parsed]
+            cols_list = [c for (_, c) in parsed]
+
+            if not rows_list or not cols_list:
+                flash("Invalid seat selection.", "error")
+                return redirect(url_for("draft_select_seats"))
+
+            row_ph = ",".join(["?"] * len(rows_list))
+            col_ph = ",".join(["?"] * len(cols_list))
 
             with db_cursor() as (_, cursor):
                 cursor.execute(f"""
                     SELECT Row_Num, Column_Number, Class
                     FROM Seats
-                    WHERE Plane_ID = %s
-                      AND (Row_Num, Column_Number) IN ({placeholders})
-                """, (plane_id, *flat_params))
-                rows = cursor.fetchall()
+                    WHERE Plane_ID = ?
+                      AND Row_Num IN ({row_ph})
+                      AND Column_Number IN ({col_ph})
+                """, (plane_id, *rows_list, *cols_list))
+                rows = cursor.fetchall() or []
 
-            if len(rows) != len(parsed):
+            # Validate exact seats exist
+            db_set = {(int(r["Row_Num"]), str(r["Column_Number"])) for r in rows}
+            wanted_set = {(int(r), str(c)) for (r, c) in parsed}
+            if db_set != wanted_set:
                 flash("One or more selected seats are invalid.", "error")
                 return redirect(url_for("draft_select_seats"))
 
+            # Validate class
             if any(r["Class"] != ticket_class for r in rows):
                 flash(f"You can only select {ticket_class} seats for this ticket type.", "error")
                 return redirect(url_for("draft_select_seats"))
 
+            # Validate availability
             if any(s in occupied for s in selected):
                 flash("One or more seats are no longer available. Please choose again.", "error")
                 return redirect(url_for("draft_select_seats"))
@@ -812,7 +871,7 @@ def order_review():
                 FROM Flight f
                 JOIN Airports ao ON ao.Airport_ID = f.Origin_Airport
                 JOIN Airports ad ON ad.Airport_ID = f.Destination_Airport
-                WHERE f.Flight_ID = %s
+                WHERE f.Flight_ID = ?
             """, (int(draft["flight_id"]),))
             flight = cursor.fetchone()
             if not flight:
@@ -826,9 +885,9 @@ def order_review():
                 cursor.execute("""
                     SELECT Class
                     FROM Seats
-                    WHERE Plane_ID = %s
-                      AND Row_Num = %s
-                      AND Column_Number = %s
+                    WHERE Plane_ID = ?
+                      AND Row_Num = ?
+                      AND Column_Number = ?
                 """, (draft["plane_id"], row_num, col))
                 srow = cursor.fetchone()
                 seat_class = (srow["Class"] if srow else "Economy")
@@ -885,10 +944,10 @@ def confirm_order():
                     SELECT 1
                     FROM Selected_Seats ss
                     JOIN Orders o ON o.Unique_Order_ID = ss.Unique_Order_ID
-                    WHERE o.Flight_ID = %s
-                      AND ss.Plane_ID = %s
-                      AND ss.Row_Num = %s
-                      AND ss.Column_Number = %s
+                    WHERE o.Flight_ID = ?
+                      AND ss.Plane_ID = ?
+                      AND ss.Row_Num = ?
+                      AND ss.Column_Number = ?
                       AND ss.Is_Occupied = 1
                       AND o.Order_Status = 'active'
                     LIMIT 1
@@ -900,19 +959,19 @@ def confirm_order():
             # Ensure guest exists
             if user_type == "guest":
                 cursor.execute(
-                    "SELECT Email_Address FROM Unidentified_Guests WHERE Email_Address = %s",
+                    "SELECT Email_Address FROM Unidentified_Guests WHERE Email_Address = ?",
                     (email,))
                 if not cursor.fetchone():
                     cursor.execute("""
                         INSERT INTO Unidentified_Guests (Email_Address, First_Name_In_English, Last_Name_In_English)
-                        VALUES (%s, %s, %s)
+                        VALUES (?, ?, ?)
                     """, (email, draft.get("first_name", ""), draft.get("last_name", "")))
 
             # Fetch flight prices once
             cursor.execute("""
                 SELECT Economy_Price, Business_Price
                 FROM Flight
-                WHERE Flight_ID = %s
+                WHERE Flight_ID = ?
                 LIMIT 1
             """, (flight_id,))
             pr = cursor.fetchone()
@@ -922,7 +981,7 @@ def confirm_order():
             eco_price = float(pr["Economy_Price"])
             bus_price = float(pr["Business_Price"])
 
-            #Compute Final_Total based on seat classes
+            # Compute Final_Total based on seat classes
             final_total = 0.0
             for seat_id in seats:
                 row_num = int(seat_id[:-1])
@@ -931,9 +990,9 @@ def confirm_order():
                 cursor.execute("""
                     SELECT Class
                     FROM Seats
-                    WHERE Plane_ID = %s
-                      AND Row_Num = %s
-                      AND Column_Number = %s
+                    WHERE Plane_ID = ?
+                      AND Row_Num = ?
+                      AND Column_Number = ?
                     LIMIT 1
                 """, (plane_id, row_num, col))
                 srow = cursor.fetchone()
@@ -948,17 +1007,17 @@ def confirm_order():
 
             final_total = round(final_total, 2)
 
-            #Create new order id
+            # Create new order id
             new_order_id = next_order_id(cursor)
 
-            #Insert order WITH Final_Total
+            # Insert order WITH Final_Total
             if user_type == "registered_client":
                 cursor.execute("""
                     INSERT INTO Orders
                       (Unique_Order_ID, Flight_ID, Registered_Clients_Email_Address, Unidentified_Guest_Email_Address,
                        Order_Status, Final_Total)
                     VALUES
-                      (%s, %s, %s, NULL, 'active', %s)
+                      (?, ?, ?, NULL, 'active', ?)
                 """, (new_order_id, flight_id, email, final_total))
             else:
                 cursor.execute("""
@@ -966,13 +1025,13 @@ def confirm_order():
                       (Unique_Order_ID, Flight_ID, Registered_Clients_Email_Address, Unidentified_Guest_Email_Address,
                        Order_Status, Final_Total)
                     VALUES
-                      (%s, %s, NULL, %s, 'active', %s)
+                      (?, ?, NULL, ?, 'active', ?)
                 """, (new_order_id, flight_id, email, final_total))
 
             # Insert Has_an_order
             cursor.execute("""
                 INSERT INTO Has_an_order (Email_Address, Unique_Order_ID, Quantity_of_tickets)
-                VALUES (%s, %s, %s)
+                VALUES (?, ?, ?)
             """, (email, new_order_id, needed))
 
             # Insert Selected_Seats
@@ -981,7 +1040,7 @@ def confirm_order():
                 col = seat_id[-1]
                 cursor.execute("""
                     INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-                    VALUES (%s, %s, %s, %s, 1)
+                    VALUES (?, ?, ?, ?, 1)
                 """, (plane_id, new_order_id, col, row_num))
 
         if user_type == "guest":
@@ -1001,6 +1060,7 @@ def confirm_order():
         flash(f"Database error while confirming order: {e}", "error")
         return redirect(url_for("order_review"))
 
+
 # =============================
 # ORDER DETAILS FETCHERS
 # =============================
@@ -1015,7 +1075,7 @@ def fetch_order_details(unique_order_id: int, user_is_reg: bool, email: str):
                   o.Registered_Clients_Email_Address,
                   o.Unidentified_Guest_Email_Address
                 FROM Orders o
-                WHERE o.Unique_Order_ID = %s
+                WHERE o.Unique_Order_ID = ?
                 LIMIT 1
             """, (unique_order_id,))
             o = cursor.fetchone()
@@ -1040,7 +1100,7 @@ def fetch_order_details(unique_order_id: int, user_is_reg: bool, email: str):
                 FROM Flight f
                 JOIN Airports ao ON ao.Airport_ID = f.Origin_Airport
                 JOIN Airports ad ON ad.Airport_ID = f.Destination_Airport
-                WHERE f.Flight_ID = %s
+                WHERE f.Flight_ID = ?
                 LIMIT 1
             """, (o["Flight_ID"],))
             f = cursor.fetchone()
@@ -1050,8 +1110,8 @@ def fetch_order_details(unique_order_id: int, user_is_reg: bool, email: str):
             cursor.execute("""
                 SELECT Quantity_of_tickets
                 FROM Has_an_order
-                WHERE Unique_Order_ID = %s
-                  AND Email_Address = %s
+                WHERE Unique_Order_ID = ?
+                  AND Email_Address = ?
                 LIMIT 1
             """, (unique_order_id, email))
             q = cursor.fetchone()
@@ -1060,7 +1120,7 @@ def fetch_order_details(unique_order_id: int, user_is_reg: bool, email: str):
             cursor.execute("""
                 SELECT Row_Num, Column_Number
                 FROM Selected_Seats
-                WHERE Unique_Order_ID = %s
+                WHERE Unique_Order_ID = ?
                   AND Is_Occupied = 1
                 ORDER BY Row_Num, Column_Number
             """, (unique_order_id,))
@@ -1081,10 +1141,10 @@ def fetch_order_details(unique_order_id: int, user_is_reg: bool, email: str):
                 "departure_date": f["Departure_Date"],
                 "departure_time": f["Departure_Time"],
                 "quantity_of_tickets": qty,
-                "seats": seats}
+                "seats": seats
+            }
     except Exception:
         return None
-
 
 @app.route("/order/<int:unique_order_id>/confirmed")
 def order_confirmed(unique_order_id):
@@ -1105,7 +1165,7 @@ def _fetch_order_seats(cursor, unique_order_id: int):
     cursor.execute("""
         SELECT Row_Num, Column_Number
         FROM Selected_Seats
-        WHERE Unique_Order_ID = %s
+        WHERE Unique_Order_ID = ?
           AND Is_Occupied = 1
         ORDER BY Row_Num, Column_Number
     """, (unique_order_id,))
@@ -1136,9 +1196,9 @@ def fetch_future_orders_registered(email: str):
                 LEFT JOIN Has_an_order hao
                   ON hao.Unique_Order_ID = o.Unique_Order_ID
                  AND hao.Email_Address = o.Registered_Clients_Email_Address
-                WHERE o.Registered_Clients_Email_Address = %s
+                WHERE o.Registered_Clients_Email_Address = ?
                   AND o.Order_Status = 'active'
-                  AND f.Departure_Date >= CURDATE()
+                  AND f.Departure_Date >= DATE('now')
                 ORDER BY f.Departure_Date, f.Departure_Time
             """, (email,))
 
@@ -1174,10 +1234,10 @@ def fetch_future_orders_guest(unique_order_id: str, email: str):
                 LEFT JOIN Has_an_order hao
                   ON hao.Unique_Order_ID = o.Unique_Order_ID
                  AND hao.Email_Address = o.Unidentified_Guest_Email_Address
-                WHERE o.Unique_Order_ID = %s
-                  AND o.Unidentified_Guest_Email_Address = %s
+                WHERE o.Unique_Order_ID = ?
+                  AND o.Unidentified_Guest_Email_Address = ?
                   AND o.Order_Status = 'active'
-                  AND f.Departure_Date >= CURDATE()
+                  AND f.Departure_Date >= DATE('now')
                 LIMIT 1
             """, (unique_order_id, email))
 
@@ -1215,8 +1275,8 @@ def fetch_past_orders_registered(email: str):
                 LEFT JOIN Has_an_order hao
                   ON hao.Unique_Order_ID = o.Unique_Order_ID
                  AND hao.Email_Address = o.Registered_Clients_Email_Address
-                WHERE o.Registered_Clients_Email_Address = %s
-                  AND f.Departure_Date < CURDATE()
+                WHERE o.Registered_Clients_Email_Address = ?
+                  AND f.Departure_Date < DATE('now')
                 ORDER BY f.Departure_Date DESC, f.Departure_Time DESC
             """, (email,))
 
@@ -1240,7 +1300,7 @@ def order_management():
     user_is_reg = bool(is_registered_user())
     future_orders, past_orders = [], []
 
-    #bring orders
+    # bring orders
     if tab == "future":
         if user_is_reg:
             email = session.get("Email_Address")
@@ -1260,7 +1320,7 @@ def order_management():
     # -----------------------------
     flight_prices_cache = {}   # flight_id -> {"Economy": x, "Business": y}
     order_class_cache = {}     # unique_order_id -> "Economy"/"Business"
-    cancelled_orig_totals = session.get("cancelled_order_original_totals") or {}  # set by cancel_order
+    cancelled_orig_totals = session.get("cancelled_order_original_totals") or {}
 
     def _get_prices(flight_id: int):
         if flight_id not in flight_prices_cache:
@@ -1273,7 +1333,6 @@ def order_management():
         return order_class_cache[unique_order_id]
 
     def _calc_original_total(order: dict) -> float:
-        """ Calculates the original order total by multiplying the ticket quantity by the flight price according to the inferred ticket class. """
         qty = order.get("quantity_of_tickets") or 0
         try:
             qty = int(qty)
@@ -1291,37 +1350,35 @@ def order_management():
     def _attach_final_total(orders: list[dict]):
         for o in orders:
             status = (o.get("order_status") or "").strip().lower()
-            # manager cancellation => full refund => 0
             if status == "systemcancellation":
                 o["final_total"] = 0.0
                 continue
-            # customer cancellation => fee 5% of ORIGINAL total
             if status == "customercancellation":
-                # after customer cancellation seats were freed, so take original total from session if available
                 orig = cancelled_orig_totals.get(str(o.get("unique_order_id")))
                 if orig is None:
-                    # fallback: try compute (might be 0 if seats already freed)
                     try:
                         orig = _calc_original_total(o)
                     except Exception:
                         orig = 0.0
                 o["final_total"] = round(float(orig) * 0.05, 2)
                 continue
-            # active / done / others => full original total
             try:
                 o["final_total"] = _calc_original_total(o)
             except Exception:
                 o["final_total"] = 0.0
+
     if tab == "future":
         _attach_final_total(future_orders)
     else:
         _attach_final_total(past_orders)
+
     return render_template(
         "order_management.html",
         active_tab=tab,
         user_is_registered=user_is_reg,
         future_orders=future_orders,
-        past_orders=past_orders)
+        past_orders=past_orders
+    )
 
 # =============================
 # ORDER LOOKUP (GUEST)
@@ -1370,7 +1427,8 @@ def cancel_order():
     if not email:
         flash("Please identify your order first (Order ID + Email).", "error")
         return redirect(url_for("order_management", tab="future"))
-    try: #Load order, flight details, and current total
+
+    try:
         with db_cursor() as (_, cursor):
             cursor.execute("""
                 SELECT
@@ -1384,57 +1442,63 @@ def cancel_order():
                     f.Departure_Time
                 FROM Orders o
                 JOIN Flight f ON f.Flight_ID = o.Flight_ID
-                WHERE o.Unique_Order_ID = %s
+                WHERE o.Unique_Order_ID = ?
                 LIMIT 1
             """, (unique_order_id,))
             o = cursor.fetchone()
+
         if not o:
             flash("Order not found.", "error")
             return redirect(url_for("order_management", tab="future"))
+
         owner_email = o["Registered_Clients_Email_Address"] or o["Unidentified_Guest_Email_Address"]
         if (owner_email or "").strip().lower() != (email or "").strip().lower():
             flash("Access denied.", "error")
             return redirect(url_for("order_management", tab="future"))
+
         if (o["Order_Status"] or "").strip().lower() != "active":
             flash("Only active orders can be cancelled.", "error")
             return redirect(url_for("order_management", tab="future"))
+
         if not can_cancel(o["Departure_Date"], o["Departure_Time"]):
             flash("Cancellation not available (less than 36 hours before departure).", "error")
             return redirect(url_for("order_management", tab="future"))
-        # 2) Calculate 5% cancellation fee from the stored total
+
         try:
             current_total = float(o["Final_Total"] or 0.0)
         except Exception:
             current_total = 0.0
+
         fee_total = round(current_total * 0.05, 2)
-        # Transaction: update order status, update Final_Total, and release seats
+
         with db_transaction() as (_, cursor):
-            # Lock the order row to prevent race conditions / double submission
+            # SQLite: no FOR UPDATE. Transaction itself provides the needed safety in your single-app context.
             cursor.execute("""
                 SELECT Unique_Order_ID, Order_Status, Final_Total
                 FROM Orders
-                WHERE Unique_Order_ID = %s
-                FOR UPDATE
+                WHERE Unique_Order_ID = ?
             """, (unique_order_id,))
             locked = cursor.fetchone()
+
             if not locked:
                 flash("Order not found.", "error")
                 return redirect(url_for("order_management", tab="future"))
+
             if (locked["Order_Status"] or "").strip().lower() != "active":
                 flash("Only active orders can be cancelled.", "error")
                 return redirect(url_for("order_management", tab="future"))
-            # Update order
+
             cursor.execute("""
                 UPDATE Orders
                 SET Order_Status = 'customercancellation',
-                    Final_Total = %s
-                WHERE Unique_Order_ID = %s
+                    Final_Total = ?
+                WHERE Unique_Order_ID = ?
             """, (fee_total, unique_order_id))
-            # Release seats
+
             cursor.execute("""
                 UPDATE Selected_Seats
                 SET Is_Occupied = 0
-                WHERE Unique_Order_ID = %s
+                WHERE Unique_Order_ID = ?
             """, (unique_order_id,))
 
         flash(
@@ -1452,12 +1516,10 @@ def cancel_order():
 # ======================================================
 
 def admin_required() -> bool:
-    """True if an admin is logged in."""
     return session.get("user_type") == "admin" and session.get("worker_id")
 
 
 def admin_required_or_redirect():
-    """Helper that flashes message and returns False if not admin."""
     if not admin_required():
         flash("Admin access only.", "error")
         return False
@@ -1485,10 +1547,10 @@ def admin_reports():
     try:
         with db_cursor() as (_, cursor):
 
-            #Average occupancy of completed flights
+            # Average occupancy of completed flights
             cursor.execute("""
                 SELECT
-                    ROUND(AVG(per_flight.occupied_seats / per_flight.total_seats) * 100, 2) AS avg_occupancy_percent
+                    ROUND(AVG(per_flight.occupied_seats * 1.0 / per_flight.total_seats) * 100, 2) AS avg_occupancy_percent
                 FROM (
                     SELECT
                         f.Flight_ID,
@@ -1503,7 +1565,7 @@ def admin_reports():
                         ON o.Flight_ID = f.Flight_ID
                     JOIN Selected_Seats ss
                         ON ss.Unique_Order_ID = o.Unique_Order_ID
-                       AND ss.Is_Occupied = TRUE
+                       AND ss.Is_Occupied = 1
                     WHERE f.Flight_Status = 'done'
                     GROUP BY f.Flight_ID, f.Plane_ID
                 ) AS per_flight;
@@ -1555,24 +1617,27 @@ def admin_reports():
             revenue_rows = cursor.fetchall() or []
 
             # Workers accumulated flight hours (short vs long)
+            # SQLite: replace TIME_TO_SEC and time compare with seconds via strftime
             cursor.execute("""
                 SELECT
                     w.Worker_ID,
                     w.Employee_Type,
                     ROUND(SUM(
                         CASE
-                            WHEN r.Duration <= '06:00:00'
-                            THEN TIME_TO_SEC(r.Duration)
+                            WHEN (strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00'))
+                                 <= (6 * 3600)
+                            THEN (strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00'))
                             ELSE 0
                         END
-                    ) / 3600, 2) AS Short_Flight_Hours,
+                    ) / 3600.0, 2) AS Short_Flight_Hours,
                     ROUND(SUM(
                         CASE
-                            WHEN r.Duration > '06:00:00'
-                            THEN TIME_TO_SEC(r.Duration)
+                            WHEN (strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00'))
+                                 > (6 * 3600)
+                            THEN (strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00'))
                             ELSE 0
                         END
-                    ) / 3600, 2) AS Long_Flight_Hours
+                    ) / 3600.0, 2) AS Long_Flight_Hours
                 FROM (
                     SELECT Worker_ID, 'Pilot' AS Employee_Type
                     FROM Pilots
@@ -1606,38 +1671,37 @@ def admin_reports():
             """)
             worker_hours_rows = cursor.fetchall() or []
 
-            #Customer cancellation rate by month
+            # Customer cancellation rate by month
             cursor.execute("""
                 SELECT
-                    DATE_FORMAT(Date_Of_Order, '%m-%Y') AS month_year,
-                    COUNT(*) AS total_orders,
-                    SUM(CASE WHEN Order_Status = 'customercancellation' THEN 1 ELSE 0 END) AS customer_cancellations,
+                    strftime('%m-%Y', Date_Of_Order) AS month_year,
                     ROUND(
                         100.0 * SUM(CASE WHEN Order_Status = 'customercancellation' THEN 1 ELSE 0 END) / COUNT(*),
                         2
                     ) AS customer_cancellation_rate_percent
                 FROM Orders
-                GROUP BY DATE_FORMAT(Date_Of_Order, '%m-%Y')
+                GROUP BY strftime('%Y-%m', Date_Of_Order)
                 ORDER BY MIN(Date_Of_Order);
             """)
             cancel_rate_rows = cursor.fetchall() or []
 
-            #Monthly activity per plane
+            # Monthly activity per plane
+            # SQLite: DATE_FORMAT/YEAR/MONTH -> strftime, CONCAT -> printf, SUM(boolean) -> SUM(CASE WHEN ... THEN 1 ELSE 0 END)
             cursor.execute("""
                 SELECT
                     f.Plane_ID,
-                    DATE_FORMAT(MIN(f.Departure_Date), '%m-%Y') AS month_year,
+                    strftime('%m-%Y', MIN(f.Departure_Date)) AS month_year,
 
-                    SUM(f.Flight_Status = 'done') AS flights_performed,
-                    SUM(f.Flight_Status = 'cancelled') AS flights_cancelled,
+                    SUM(CASE WHEN f.Flight_Status = 'done' THEN 1 ELSE 0 END) AS flights_performed,
+                    SUM(CASE WHEN f.Flight_Status = 'cancelled' THEN 1 ELSE 0 END) AS flights_cancelled,
 
-                    ROUND(100.0 * SUM(f.Flight_Status = 'done') / 30, 2) AS utilization_percent,
+                    ROUND(100.0 * SUM(CASE WHEN f.Flight_Status = 'done' THEN 1 ELSE 0 END) / 30.0, 2) AS utilization_percent,
 
                     (
-                        SELECT CONCAT(f2.Origin_Airport, '-', f2.Destination_Airport)
+                        SELECT printf('%s-%s', f2.Origin_Airport, f2.Destination_Airport)
                         FROM Flight f2
                         WHERE f2.Plane_ID = f.Plane_ID
-                          AND DATE_FORMAT(f2.Departure_Date, '%Y-%m') = DATE_FORMAT(MIN(f.Departure_Date), '%Y-%m')
+                          AND strftime('%Y-%m', f2.Departure_Date) = strftime('%Y-%m', MIN(f.Departure_Date))
                         GROUP BY f2.Origin_Airport, f2.Destination_Airport
                         ORDER BY COUNT(*) DESC, f2.Origin_Airport, f2.Destination_Airport
                         LIMIT 1
@@ -1646,12 +1710,12 @@ def admin_reports():
                 FROM Flight f
                 GROUP BY
                     f.Plane_ID,
-                    YEAR(f.Departure_Date),
-                    MONTH(f.Departure_Date)
+                    strftime('%Y', f.Departure_Date),
+                    strftime('%m', f.Departure_Date)
                 ORDER BY
                     f.Plane_ID,
-                    YEAR(f.Departure_Date),
-                    MONTH(f.Departure_Date);
+                    strftime('%Y', f.Departure_Date),
+                    strftime('%m', f.Departure_Date);
             """)
             plane_month_rows = cursor.fetchall() or []
 
@@ -1668,9 +1732,597 @@ def admin_reports():
         flash(f"Database error loading reports: {e}", "error")
         return redirect(url_for("admin_dashboard"))
 
+
 @app.route('/admin/login')
 def admin_login():
     return redirect(url_for("login"))
+
+
+@app.route("/order/<int:unique_order_id>/confirmed")
+def order_confirmed(unique_order_id):
+    user_is_reg, email = get_order_owner_email()
+    if not email:
+        flash("Order confirmed. Please use Order Management to look it up.", "info")
+        return redirect(url_for("order_management", tab="future"))
+
+    order = fetch_order_details(unique_order_id, user_is_reg=user_is_reg, email=email)
+    if not order:
+        flash("Order not found or access denied.", "error")
+        return redirect(url_for("order_management", tab="future"))
+
+    return render_template("order_confirmed.html", order=order)
+
+
+def _fetch_order_seats(cursor, unique_order_id: int):
+    cursor.execute("""
+        SELECT Row_Num, Column_Number
+        FROM Selected_Seats
+        WHERE Unique_Order_ID = ?
+          AND Is_Occupied = 1
+        ORDER BY Row_Num, Column_Number
+    """, (unique_order_id,))
+    rows = cursor.fetchall() or []
+    return [f"{r['Row_Num']}{r['Column_Number']}" for r in rows]
+
+
+def fetch_future_orders_registered(email: str):
+    try:
+        with db_cursor() as (_, cursor):
+            cursor.execute("""
+                SELECT
+                    o.Unique_Order_ID AS unique_order_id,
+                    o.Order_Status    AS order_status,
+                    o.Flight_ID       AS flight_id,
+
+                    ao.Airport_Name AS origin_airport,
+                    ad.Airport_Name AS destination_airport,
+
+                    f.Departure_Date AS departure_date,
+                    f.Departure_Time AS departure_time,
+
+                    hao.Quantity_of_tickets AS quantity_of_tickets
+                FROM Orders o
+                JOIN Flight f ON f.Flight_ID = o.Flight_ID
+                JOIN Airports ao ON ao.Airport_ID = f.Origin_Airport
+                JOIN Airports ad ON ad.Airport_ID = f.Destination_Airport
+                LEFT JOIN Has_an_order hao
+                  ON hao.Unique_Order_ID = o.Unique_Order_ID
+                 AND hao.Email_Address = o.Registered_Clients_Email_Address
+                WHERE o.Registered_Clients_Email_Address = ?
+                  AND o.Order_Status = 'active'
+                  AND f.Departure_Date >= DATE('now')
+                ORDER BY f.Departure_Date, f.Departure_Time
+            """, (email,))
+
+            orders = cursor.fetchall() or []
+            for o in orders:
+                o["seats"] = _fetch_order_seats(cursor, int(o["unique_order_id"]))
+                o["cancellable"] = can_cancel(o["departure_date"], o["departure_time"])
+            return orders
+    except Exception:
+        return []
+
+
+def fetch_future_orders_guest(unique_order_id: str, email: str):
+    try:
+        with db_cursor() as (_, cursor):
+            cursor.execute("""
+                SELECT
+                    o.Unique_Order_ID AS unique_order_id,
+                    o.Order_Status    AS order_status,
+                    o.Flight_ID       AS flight_id,
+
+                    ao.Airport_Name AS origin_airport,
+                    ad.Airport_Name AS destination_airport,
+
+                    f.Departure_Date AS departure_date,
+                    f.Departure_Time AS departure_time,
+
+                    hao.Quantity_of_tickets AS quantity_of_tickets
+                FROM Orders o
+                JOIN Flight f ON f.Flight_ID = o.Flight_ID
+                JOIN Airports ao ON ao.Airport_ID = f.Origin_Airport
+                JOIN Airports ad ON ad.Airport_ID = f.Destination_Airport
+                LEFT JOIN Has_an_order hao
+                  ON hao.Unique_Order_ID = o.Unique_Order_ID
+                 AND hao.Email_Address = o.Unidentified_Guest_Email_Address
+                WHERE o.Unique_Order_ID = ?
+                  AND o.Unidentified_Guest_Email_Address = ?
+                  AND o.Order_Status = 'active'
+                  AND f.Departure_Date >= DATE('now')
+                LIMIT 1
+            """, (unique_order_id, email))
+
+            row = cursor.fetchone()
+            if not row:
+                return []
+
+            row["seats"] = _fetch_order_seats(cursor, int(row["unique_order_id"]))
+            row["cancellable"] = can_cancel(row["departure_date"], row["departure_time"])
+            return [row]
+    except Exception:
+        return []
+
+
+def fetch_past_orders_registered(email: str):
+    try:
+        with db_cursor() as (_, cursor):
+            cursor.execute("""
+                SELECT
+                    o.Unique_Order_ID AS unique_order_id,
+                    o.Order_Status    AS order_status,
+                    o.Flight_ID       AS flight_id,
+
+                    ao.Airport_Name AS origin_airport,
+                    ad.Airport_Name AS destination_airport,
+
+                    f.Departure_Date AS departure_date,
+                    f.Departure_Time AS departure_time,
+
+                    hao.Quantity_of_tickets AS quantity_of_tickets
+                FROM Orders o
+                JOIN Flight f ON f.Flight_ID = o.Flight_ID
+                JOIN Airports ao ON ao.Airport_ID = f.Origin_Airport
+                JOIN Airports ad ON ad.Airport_ID = f.Destination_Airport
+                LEFT JOIN Has_an_order hao
+                  ON hao.Unique_Order_ID = o.Unique_Order_ID
+                 AND hao.Email_Address = o.Registered_Clients_Email_Address
+                WHERE o.Registered_Clients_Email_Address = ?
+                  AND f.Departure_Date < DATE('now')
+                ORDER BY f.Departure_Date DESC, f.Departure_Time DESC
+            """, (email,))
+
+            orders = cursor.fetchall() or []
+            for o in orders:
+                o["seats"] = _fetch_order_seats(cursor, int(o["unique_order_id"]))
+                o["cancellable"] = False
+            return orders
+    except Exception:
+        return []
+
+
+# =============================
+# ORDER MANAGEMENT
+# =============================
+@app.route("/order-management")
+def order_management():
+    tab = request.args.get("tab", "future")
+    if tab not in ("future", "history"):
+        tab = "future"
+
+    user_is_reg = bool(is_registered_user())
+    future_orders, past_orders = [], []
+
+    if tab == "future":
+        if user_is_reg:
+            email = session.get("Email_Address")
+            future_orders = fetch_future_orders_registered(email)
+        else:
+            unique = session.get("guest_unique_order_id")
+            gemail = session.get("guest_email_address")
+            if unique and gemail:
+                future_orders = fetch_future_orders_guest(unique, gemail)
+    else:
+        if user_is_reg:
+            email = session.get("Email_Address")
+            past_orders = fetch_past_orders_registered(email)
+
+    flight_prices_cache = {}
+    order_class_cache = {}
+    cancelled_orig_totals = session.get("cancelled_order_original_totals") or {}
+
+    def _get_prices(flight_id: int):
+        if flight_id not in flight_prices_cache:
+            flight_prices_cache[flight_id] = fetch_flight_prices(flight_id)
+        return flight_prices_cache[flight_id]
+
+    def _get_class(unique_order_id: int):
+        if unique_order_id not in order_class_cache:
+            order_class_cache[unique_order_id] = infer_order_ticket_class(unique_order_id)
+        return order_class_cache[unique_order_id]
+
+    def _calc_original_total(order: dict) -> float:
+        qty = order.get("quantity_of_tickets") or 0
+        try:
+            qty = int(qty)
+        except Exception:
+            qty = 0
+
+        flight_id = int(order.get("flight_id"))
+        unique_order_id = int(order.get("unique_order_id"))
+
+        tc = _get_class(unique_order_id)
+        prices = _get_prices(flight_id)
+        price = float(prices.get(tc, 0.0))
+        return round(qty * price, 2)
+
+    def _attach_final_total(orders: list[dict]):
+        for o in orders:
+            status = (o.get("order_status") or "").strip().lower()
+            if status == "systemcancellation":
+                o["final_total"] = 0.0
+                continue
+            if status == "customercancellation":
+                orig = cancelled_orig_totals.get(str(o.get("unique_order_id")))
+                if orig is None:
+                    try:
+                        orig = _calc_original_total(o)
+                    except Exception:
+                        orig = 0.0
+                o["final_total"] = round(float(orig) * 0.05, 2)
+                continue
+            try:
+                o["final_total"] = _calc_original_total(o)
+            except Exception:
+                o["final_total"] = 0.0
+
+    if tab == "future":
+        _attach_final_total(future_orders)
+    else:
+        _attach_final_total(past_orders)
+
+    return render_template(
+        "order_management.html",
+        active_tab=tab,
+        user_is_registered=user_is_reg,
+        future_orders=future_orders,
+        past_orders=past_orders
+    )
+
+
+# =============================
+# ORDER LOOKUP (GUEST)
+# =============================
+@app.route("/order-management/lookup", methods=["POST"])
+def lookup_order():
+    unique_order_id = (request.form.get("unique_order_id") or "").strip()
+    email = (request.form.get("email_address") or "").strip()
+
+    if not unique_order_id.isdigit() or not email:
+        flash("Please enter a valid Order ID and Email Address.", "error")
+        return redirect(url_for("order_management", tab="future"))
+
+    session["guest_unique_order_id"] = unique_order_id
+    session["guest_email_address"] = email
+    return redirect(url_for("order_details", unique_order_id=int(unique_order_id)))
+
+
+# =============================
+# ORDER DETAILS (VIEW)
+# =============================
+@app.route("/order/<int:unique_order_id>", methods=["GET"])
+def order_details(unique_order_id):
+    user_is_reg, email = get_order_owner_email()
+    if not email:
+        flash("Please enter your Order ID and Email in Order Management.", "error")
+        return redirect(url_for("order_management", tab="future"))
+    order = fetch_order_details(unique_order_id, user_is_reg=user_is_reg, email=email)
+    if not order:
+        flash("Order not found or access denied.", "error")
+        return redirect(url_for("order_management", tab="future"))
+    return render_template("order_confirmed.html", order=order)
+
+
+# =============================
+# CANCEL ORDER
+# =============================
+@app.route("/order/cancel", methods=["POST"])
+def cancel_order():
+    unique_order_id = (request.form.get("unique_order_id") or "").strip()
+    if not unique_order_id.isdigit():
+        flash("Invalid Order ID.", "error")
+        return redirect(url_for("order_management", tab="future"))
+
+    unique_order_id = int(unique_order_id)
+
+    user_is_reg, email = get_order_owner_email()
+    if not email:
+        flash("Please identify your order first (Order ID + Email).", "error")
+        return redirect(url_for("order_management", tab="future"))
+
+    try:
+        with db_cursor() as (_, cursor):
+            cursor.execute("""
+                SELECT
+                    o.Unique_Order_ID,
+                    o.Order_Status,
+                    o.Flight_ID,
+                    o.Registered_Clients_Email_Address,
+                    o.Unidentified_Guest_Email_Address,
+                    o.Final_Total,
+                    f.Departure_Date,
+                    f.Departure_Time
+                FROM Orders o
+                JOIN Flight f ON f.Flight_ID = o.Flight_ID
+                WHERE o.Unique_Order_ID = ?
+                LIMIT 1
+            """, (unique_order_id,))
+            o = cursor.fetchone()
+
+        if not o:
+            flash("Order not found.", "error")
+            return redirect(url_for("order_management", tab="future"))
+
+        owner_email = o["Registered_Clients_Email_Address"] or o["Unidentified_Guest_Email_Address"]
+        if (owner_email or "").strip().lower() != (email or "").strip().lower():
+            flash("Access denied.", "error")
+            return redirect(url_for("order_management", tab="future"))
+
+        if (o["Order_Status"] or "").strip().lower() != "active":
+            flash("Only active orders can be cancelled.", "error")
+            return redirect(url_for("order_management", tab="future"))
+
+        if not can_cancel(o["Departure_Date"], o["Departure_Time"]):
+            flash("Cancellation not available (less than 36 hours before departure).", "error")
+            return redirect(url_for("order_management", tab="future"))
+
+        try:
+            current_total = float(o["Final_Total"] or 0.0)
+        except Exception:
+            current_total = 0.0
+        fee_total = round(current_total * 0.05, 2)
+
+        with db_transaction() as (_, cursor):
+            # SQLite: no FOR UPDATE
+            cursor.execute("""
+                SELECT Unique_Order_ID, Order_Status, Final_Total
+                FROM Orders
+                WHERE Unique_Order_ID = ?
+            """, (unique_order_id,))
+            locked = cursor.fetchone()
+
+            if not locked:
+                flash("Order not found.", "error")
+                return redirect(url_for("order_management", tab="future"))
+
+            if (locked["Order_Status"] or "").strip().lower() != "active":
+                flash("Only active orders can be cancelled.", "error")
+                return redirect(url_for("order_management", tab="future"))
+
+            cursor.execute("""
+                UPDATE Orders
+                SET Order_Status = 'customercancellation',
+                    Final_Total = ?
+                WHERE Unique_Order_ID = ?
+            """, (fee_total, unique_order_id))
+
+            cursor.execute("""
+                UPDATE Selected_Seats
+                SET Is_Occupied = 0
+                WHERE Unique_Order_ID = ?
+            """, (unique_order_id,))
+
+        flash(
+            f"Order {unique_order_id} cancelled. Cancellation fee charged: ${fee_total:.2f}",
+            "success"
+        )
+        return redirect(url_for("order_management", tab="future"))
+
+    except Exception as e:
+        flash(f"Database error while cancelling order: {e}", "error")
+        return redirect(url_for("order_management", tab="future"))
+
+
+# ======================================================
+# ===================== ADMIN PART ======================
+# ======================================================
+
+def admin_required() -> bool:
+    return session.get("user_type") == "admin" and session.get("worker_id")
+
+
+def admin_required_or_redirect():
+    if not admin_required():
+        flash("Admin access only.", "error")
+        return False
+    return True
+
+
+@app.route("/admin/dashboard")
+def admin_dashboard():
+    if not admin_required_or_redirect():
+        return redirect(url_for("login"))
+    return render_template("admin_dashboard.html")
+
+
+@app.route("/admin/reports", methods=["GET"])
+def admin_reports():
+    if not admin_required_or_redirect():
+        return redirect(url_for("login"))
+
+    avg_occupancy_percent = None
+    revenue_rows = []
+    worker_hours_rows = []
+    cancel_rate_rows = []
+    plane_month_rows = []
+
+    try:
+        with db_cursor() as (_, cursor):
+
+            # Average occupancy of completed flights
+            cursor.execute("""
+                SELECT
+                    ROUND(AVG(per_flight.occupied_seats * 1.0 / per_flight.total_seats) * 100, 2) AS avg_occupancy_percent
+                FROM (
+                    SELECT
+                        f.Flight_ID,
+                        COUNT(*) AS occupied_seats,
+                        (
+                            SELECT COUNT(*)
+                            FROM Seats s
+                            WHERE s.Plane_ID = f.Plane_ID
+                        ) AS total_seats
+                    FROM Flight f
+                    JOIN Orders o
+                        ON o.Flight_ID = f.Flight_ID
+                    JOIN Selected_Seats ss
+                        ON ss.Unique_Order_ID = o.Unique_Order_ID
+                       AND ss.Is_Occupied = 1
+                    WHERE f.Flight_Status = 'done'
+                    GROUP BY f.Flight_ID, f.Plane_ID
+                ) AS per_flight;
+            """)
+            row = cursor.fetchone()
+            avg_occupancy_percent = row["avg_occupancy_percent"] if row else None
+
+            # Revenue by manufacturer/size/class
+            cursor.execute("""
+                SELECT
+                    pl.Plane_Size,
+                    pl.Manufacturer,
+                    s.Class,
+                    SUM(
+                        CASE
+                            WHEN o.Order_Status IN ('active','done') THEN
+                                CASE
+                                    WHEN s.Class = 'Economy'  THEN f.Economy_Price
+                                    WHEN s.Class = 'Business' THEN f.Business_Price
+                                END
+                            WHEN o.Order_Status = 'customercancellation' THEN
+                                0.05 * CASE
+                                    WHEN s.Class = 'Economy'  THEN f.Economy_Price
+                                    WHEN s.Class = 'Business' THEN f.Business_Price
+                                END
+                            WHEN o.Order_Status = 'systemcancellation' THEN
+                                0
+                            ELSE 0
+                        END
+                    ) AS Revenue
+                FROM Orders o
+                JOIN Flight f
+                  ON f.Flight_ID = o.Flight_ID
+                JOIN Planes pl
+                  ON pl.Plane_ID = f.Plane_ID
+                JOIN Selected_Seats ss
+                  ON ss.Unique_Order_ID = o.Unique_Order_ID
+                JOIN Seats s
+                  ON s.Plane_ID = ss.Plane_ID
+                 AND s.Row_Num = ss.Row_Num
+                 AND s.Column_Number = ss.Column_Number
+                GROUP BY
+                    pl.Plane_Size,
+                    pl.Manufacturer,
+                    s.Class
+                ORDER BY
+                    pl.Manufacturer, pl.Plane_Size, s.Class;
+            """)
+            revenue_rows = cursor.fetchall() or []
+
+            # Workers accumulated flight hours (short vs long)
+            # SQLite: TIME_TO_SEC replacement via strftime seconds delta
+            cursor.execute("""
+                SELECT
+                    w.Worker_ID,
+                    w.Employee_Type,
+                    ROUND(SUM(
+                        CASE
+                            WHEN (strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00'))
+                                 <= (6 * 3600)
+                            THEN (strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00'))
+                            ELSE 0
+                        END
+                    ) / 3600.0, 2) AS Short_Flight_Hours,
+                    ROUND(SUM(
+                        CASE
+                            WHEN (strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00'))
+                                 > (6 * 3600)
+                            THEN (strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00'))
+                            ELSE 0
+                        END
+                    ) / 3600.0, 2) AS Long_Flight_Hours
+                FROM (
+                    SELECT Worker_ID, 'Pilot' AS Employee_Type
+                    FROM Pilots
+                    UNION ALL
+                    SELECT Worker_ID, 'Flight_Attendant' AS Employee_Type
+                    FROM Flight_Attendants
+                ) AS w
+
+                LEFT JOIN Pilots_Scheduled_to_Flights psf
+                  ON w.Employee_Type = 'Pilot'
+                 AND psf.Worker_ID = w.Worker_ID
+
+                LEFT JOIN Flight_Attendants_Assigned_To_Flights fa
+                  ON w.Employee_Type = 'Flight_Attendant'
+                 AND fa.Worker_ID = w.Worker_ID
+
+                LEFT JOIN Flight f
+                  ON f.Flight_ID = COALESCE(psf.Flight_ID, fa.Flight_ID)
+                 AND f.Flight_Status = 'done'
+
+                LEFT JOIN Routes r
+                  ON r.Origin_Airport = f.Origin_Airport
+                 AND r.Destination_Airport = f.Destination_Airport
+
+                GROUP BY
+                    w.Worker_ID,
+                    w.Employee_Type
+                ORDER BY
+                    w.Worker_ID,
+                    w.Employee_Type;
+            """)
+            worker_hours_rows = cursor.fetchall() or []
+
+            # Customer cancellation rate by month
+            cursor.execute("""
+                SELECT
+                    strftime('%m-%Y', Date_Of_Order) AS month_year,
+                    ROUND(
+                        100.0 * SUM(CASE WHEN Order_Status = 'customercancellation' THEN 1 ELSE 0 END) / COUNT(*),
+                        2
+                    ) AS customer_cancellation_rate_percent
+                FROM Orders
+                GROUP BY strftime('%Y-%m', Date_Of_Order)
+                ORDER BY MIN(Date_Of_Order);
+            """)
+            cancel_rate_rows = cursor.fetchall() or []
+
+            # Monthly activity per plane
+            cursor.execute("""
+                SELECT
+                    f.Plane_ID,
+                    strftime('%m-%Y', MIN(f.Departure_Date)) AS month_year,
+
+                    SUM(CASE WHEN f.Flight_Status = 'done' THEN 1 ELSE 0 END) AS flights_performed,
+                    SUM(CASE WHEN f.Flight_Status = 'cancelled' THEN 1 ELSE 0 END) AS flights_cancelled,
+
+                    ROUND(100.0 * SUM(CASE WHEN f.Flight_Status = 'done' THEN 1 ELSE 0 END) / 30.0, 2) AS utilization_percent,
+
+                    (
+                        SELECT printf('%s-%s', f2.Origin_Airport, f2.Destination_Airport)
+                        FROM Flight f2
+                        WHERE f2.Plane_ID = f.Plane_ID
+                          AND strftime('%Y-%m', f2.Departure_Date) = strftime('%Y-%m', MIN(f.Departure_Date))
+                        GROUP BY f2.Origin_Airport, f2.Destination_Airport
+                        ORDER BY COUNT(*) DESC, f2.Origin_Airport, f2.Destination_Airport
+                        LIMIT 1
+                    ) AS dominant_origin_destination
+
+                FROM Flight f
+                GROUP BY
+                    f.Plane_ID,
+                    strftime('%Y', f.Departure_Date),
+                    strftime('%m', f.Departure_Date)
+                ORDER BY
+                    f.Plane_ID,
+                    strftime('%Y', f.Departure_Date),
+                    strftime('%m', f.Departure_Date);
+            """)
+            plane_month_rows = cursor.fetchall() or []
+
+        return render_template(
+            "admin_reports.html",
+            avg_occupancy_percent=avg_occupancy_percent,
+            revenue_rows=revenue_rows,
+            worker_hours_rows=worker_hours_rows,
+            cancel_rate_rows=cancel_rate_rows,
+            plane_month_rows=plane_month_rows
+        )
+
+    except Exception as e:
+        flash(f"Database error loading reports: {e}", "error")
+        return redirect(url_for("admin_dashboard"))
+
 
 # -----------------------------
 # Admin - Flight Search Board
@@ -1721,25 +2373,25 @@ def admin_flights():
             params = []
 
             if origin_id:
-                sql += " AND f.Origin_Airport = %s"
+                sql += " AND f.Origin_Airport = ?"
                 params.append(origin_id)
 
             if destination_id:
-                sql += " AND f.Destination_Airport = %s"
+                sql += " AND f.Destination_Airport = ?"
                 params.append(destination_id)
 
             if start_date and end_date:
-                sql += " AND f.Departure_Date BETWEEN %s AND %s"
+                sql += " AND f.Departure_Date BETWEEN ? AND ?"
                 params.extend([start_date, end_date])
             elif start_date:
-                sql += " AND f.Departure_Date >= %s"
+                sql += " AND f.Departure_Date >= ?"
                 params.append(start_date)
             elif end_date:
-                sql += " AND f.Departure_Date <= %s"
+                sql += " AND f.Departure_Date <= ?"
                 params.append(end_date)
 
             if status:
-                sql += " AND LOWER(f.Flight_Status) = %s"
+                sql += " AND LOWER(f.Flight_Status) = ?"
                 params.append(status)
 
             sql += " ORDER BY f.Departure_Date DESC, f.Departure_Time DESC"
@@ -1758,7 +2410,8 @@ def admin_flights():
         destination_id=destination_id,
         start_date=start_date,
         end_date=end_date,
-        status=status)
+        status=status
+    )
 
 # ======================================================
 # Admin - Add Flight
@@ -1819,6 +2472,9 @@ def admin_new_flight_step1():
         flash(f"Database error: {e}", "error")
         return redirect(url_for("admin_dashboard"))
 
+# =============================
+# Admin - Add Flight (STEP 2)
+# =============================
 @app.route("/admin/flights/new/step2", methods=["GET", "POST"])
 def admin_new_flight_step2():
     if not admin_required_or_redirect():
@@ -1849,11 +2505,13 @@ def admin_new_flight_step2():
 
                 if not plane_id or not economy_price:
                     flash("Plane and economy price are required.", "error")
-                    return render_template("admin_new_flight_step2.html",
-                                           draft=draft, planes=planes, pilots=pilots, attendants=attendants)
+                    return render_template(
+                        "admin_new_flight_step2.html",
+                        draft=draft, planes=planes, pilots=pilots, attendants=attendants
+                    )
 
-                # validate plane exists
-                cursor.execute("SELECT Plane_ID FROM Planes WHERE Plane_ID=%s", (plane_id,))
+                # validate plane exists  (SQLite: ?)
+                cursor.execute("SELECT Plane_ID FROM Planes WHERE Plane_ID = ?", (plane_id,))
                 if not cursor.fetchone():
                     flash("Selected plane not found.", "error")
                     return redirect(url_for("admin_new_flight_step2"))
@@ -1871,23 +2529,29 @@ def admin_new_flight_step2():
 
                 if len(selected_pilots) != req_pilots:
                     flash(f"Please select exactly {req_pilots} pilots.", "error")
-                    return render_template("admin_new_flight_step2.html",
-                                           draft=draft, planes=planes, pilots=pilots, attendants=attendants)
+                    return render_template(
+                        "admin_new_flight_step2.html",
+                        draft=draft, planes=planes, pilots=pilots, attendants=attendants
+                    )
 
                 if len(selected_att) != req_att:
                     flash(f"Please select exactly {req_att} attendants.", "error")
-                    return render_template("admin_new_flight_step2.html",
-                                           draft=draft, planes=planes, pilots=pilots, attendants=attendants)
+                    return render_template(
+                        "admin_new_flight_step2.html",
+                        draft=draft, planes=planes, pilots=pilots, attendants=attendants
+                    )
 
                 bp = None
                 if is_plane_large:
                     if not business_price:
                         flash("Business price is required for LARGE planes (Business class exists).", "error")
-                        return render_template("admin_new_flight_step2.html",
-                                               draft=draft, planes=planes, pilots=pilots, attendants=attendants)
+                        return render_template(
+                            "admin_new_flight_step2.html",
+                            draft=draft, planes=planes, pilots=pilots, attendants=attendants
+                        )
                     bp = float(business_price)
 
-                # HARD re-check availability now
+                # HARD re-check availability now (no SQL changes needed here, only placeholders inside utils if any)
                 current_planes = available_planes(cursor, window_start, window_end, is_long=is_long)
                 current_plane_ids = {int(p["Plane_ID"]) for p in current_planes}
                 if plane_id_int not in current_plane_ids:
@@ -1915,14 +2579,19 @@ def admin_new_flight_step2():
                 session["admin_new_flight"] = draft
                 return redirect(url_for("admin_new_flight_review"))
 
-        return render_template("admin_new_flight_step2.html",
-                               draft=draft, planes=planes, pilots=pilots, attendants=attendants)
+        return render_template(
+            "admin_new_flight_step2.html",
+            draft=draft, planes=planes, pilots=pilots, attendants=attendants
+        )
 
     except Exception as e:
         flash(f"Database error: {e}", "error")
         return redirect(url_for("admin_new_flight_step1"))
 
 
+# =============================
+# Admin - Add Flight (REVIEW)
+# =============================
 @app.route("/admin/flights/new/review", methods=["GET", "POST"])
 def admin_new_flight_review():
     if not admin_required_or_redirect():
@@ -1938,20 +2607,19 @@ def admin_new_flight_review():
         new_start = datetime.strptime(draft["window_start"], "%Y-%m-%d %H:%M:%S")
         new_end = datetime.strptime(draft["window_end"], "%Y-%m-%d %H:%M:%S")
 
-        #pass WITHOUT seconds to overlap_* helpers
+        # pass WITHOUT seconds to overlap_* helpers
         window_start_nosec = draft["window_start"][:16]  # 'YYYY-MM-DD HH:MM'
         window_end_nosec = draft["window_end"][:16]      # 'YYYY-MM-DD HH:MM'
 
         if request.method == "GET":
             return render_template("admin_new_flight_review.html", draft=draft)
 
-        # Normalize time for MySQL TIME column
+        # Normalize time for TIME column
         dep_time_sql = normalize_time_to_hhmmss(draft.get("dep_time"))
 
         # writes -> transaction
         with db_transaction() as (_, cursor):
 
-            #use window_start_nosec/window_end_nosec
             if overlap_exists_for_plane(cursor, int(draft["plane_id"]), window_start_nosec, window_end_nosec):
                 flash("Selected plane is no longer available.", "error")
                 return redirect(url_for("admin_new_flight_step2"))
@@ -1972,13 +2640,14 @@ def admin_new_flight_review():
             if business_price is None:
                 business_price = 0.00
 
+            # SQLite: ? placeholders
             cursor.execute("""
                 INSERT INTO Flight
                   (Flight_ID, Plane_ID, Origin_Airport, Destination_Airport,
                    Departure_Time, Departure_Date,
                    Economy_Price, Business_Price, Flight_Status)
                 VALUES
-                  (%s,%s,%s,%s,%s,%s,%s,%s,'active')
+                  (?,?,?,?,?,?,?,?, 'active')
             """, (
                 int(flight_id),
                 int(draft["plane_id"]),
@@ -1987,18 +2656,19 @@ def admin_new_flight_review():
                 dep_time_sql,          # always HH:MM:SS
                 draft["dep_date"],
                 float(draft["economy_price"]),
-                float(business_price)))
+                float(business_price)
+            ))
 
             for wid in draft["selected_pilots"]:
                 cursor.execute("""
                     INSERT INTO Pilots_Scheduled_to_Flights (Worker_ID, Flight_ID)
-                    VALUES (%s,%s)
+                    VALUES (?,?)
                 """, (int(wid), int(flight_id)))
 
             for wid in draft["selected_attendants"]:
                 cursor.execute("""
                     INSERT INTO Flight_Attendants_Assigned_To_Flights (Worker_ID, Flight_ID)
-                    VALUES (%s,%s)
+                    VALUES (?,?)
                 """, (int(wid), int(flight_id)))
 
         session.pop("admin_new_flight", None)
@@ -2009,6 +2679,10 @@ def admin_new_flight_review():
         flash(f"Database error: {e}", "error")
         return redirect(url_for("admin_new_flight_step1"))
 
+
+# =============================
+# Admin - Cancel Flight (pick)
+# =============================
 @app.route("/admin/flights/cancel", methods=["GET"], endpoint="admin_cancel_flight_pick")
 def admin_cancel_flight_pick_view():
     if not admin_required_or_redirect():
@@ -2018,24 +2692,28 @@ def admin_cancel_flight_pick_view():
     try:
         with db_cursor() as (_, cursor):
             cursor.execute("""
-                    SELECT Flight_ID, Departure_Date, Departure_Time, Flight_Status
-                    FROM Flight
-                    WHERE Flight_Status IN ('active','full')  
-                    ORDER BY Departure_Date, Departure_Time
-                """)
+                SELECT Flight_ID, Departure_Date, Departure_Time, Flight_Status
+                FROM Flight
+                WHERE Flight_Status IN ('active','full')
+                ORDER BY Departure_Date, Departure_Time
+            """)
             flights = cursor.fetchall() or []
 
-        # add cancel eligibility flag for UI
         now_dt = datetime.now()
         for f in flights:
             f["can_cancel"] = can_cancel_flight_by_72h_rule(
-                f["Departure_Date"], f["Departure_Time"], now_dt=now_dt)
+                f["Departure_Date"], f["Departure_Time"], now_dt=now_dt
+            )
         return render_template("admin_cancel_pick.html", flights=flights)
 
     except Exception as e:
         flash(f"Database error: {e}", "error")
         return redirect(url_for("admin_dashboard"))
 
+
+# =============================
+# Admin - Cancel Flight (confirm)
+# =============================
 @app.route("/admin/flights/<int:flight_id>/cancel", methods=["GET", "POST"], endpoint="admin_cancel_flight_confirm")
 def admin_cancel_flight_confirm(flight_id):
     if not admin_required_or_redirect():
@@ -2046,7 +2724,7 @@ def admin_cancel_flight_confirm(flight_id):
             cursor.execute("""
                 SELECT Flight_ID, Departure_Date, Departure_Time, Flight_Status
                 FROM Flight
-                WHERE Flight_ID = %s
+                WHERE Flight_ID = ?
             """, (flight_id,))
             flight = cursor.fetchone()
 
@@ -2054,7 +2732,6 @@ def admin_cancel_flight_confirm(flight_id):
             flash("Flight not found.", "error")
             return redirect(url_for("admin_cancel_flight_pick"))
 
-        # block cancel if < 72h
         if not can_cancel_flight_by_72h_rule(flight["Departure_Date"], flight["Departure_Time"]):
             flash("Cancellation is not allowed פחות מ-72 שעות לפני הטיסה.", "error")
             return redirect(url_for("admin_cancel_flight_pick"))
@@ -2064,12 +2741,11 @@ def admin_cancel_flight_confirm(flight_id):
 
         # POST -> transaction
         with db_transaction() as (_, cursor):
-            # lock flight row
+            # SQLite: no FOR UPDATE
             cursor.execute("""
                 SELECT Flight_ID, Departure_Date, Departure_Time, Flight_Status
                 FROM Flight
-                WHERE Flight_ID = %s
-                FOR UPDATE
+                WHERE Flight_ID = ?
             """, (flight_id,))
             locked = cursor.fetchone()
 
@@ -2085,36 +2761,32 @@ def admin_cancel_flight_confirm(flight_id):
                 flash("Cancellation is not allowed less than 72 hours before the flight.", "error")
                 return redirect(url_for("admin_cancel_flight_pick"))
 
-            #cancel flight
             cursor.execute("""
                 UPDATE Flight
                 SET Flight_Status = 'cancelled'
-                WHERE Flight_ID = %s
+                WHERE Flight_ID = ?
             """, (flight_id,))
 
-            #grab active orders (lock them)
+            # SQLite: no FOR UPDATE
             cursor.execute("""
                 SELECT Unique_Order_ID
                 FROM Orders
-                WHERE Flight_ID = %s
+                WHERE Flight_ID = ?
                   AND Order_Status = 'active'
-                FOR UPDATE
             """, (flight_id,))
             rows = cursor.fetchall() or []
             active_order_ids = [int(r["Unique_Order_ID"]) for r in rows]
 
-            #set systemcancellation + Final_Total=0 for those active orders
             cursor.execute("""
                 UPDATE Orders
                 SET Order_Status = 'systemcancellation',
                     Final_Total  = 0.00
-                WHERE Flight_ID = %s
+                WHERE Flight_ID = ?
                   AND Order_Status = 'active'
             """, (flight_id,))
 
-            #free seats for those orders
             if active_order_ids:
-                placeholders = ",".join(["%s"] * len(active_order_ids))
+                placeholders = ",".join(["?"] * len(active_order_ids))
                 cursor.execute(f"""
                     UPDATE Selected_Seats
                     SET Is_Occupied = 0
@@ -2128,6 +2800,10 @@ def admin_cancel_flight_confirm(flight_id):
         flash(f"Database error: {e}", "error")
         return redirect(url_for("admin_cancel_flight_pick"))
 
+
+# =============================
+# Admin - Add Staff
+# =============================
 @app.route("/admin/staff/add", methods=["GET", "POST"], endpoint="admin_add_staff")
 def admin_add_staff():
     if not admin_required_or_redirect():
@@ -2137,7 +2813,6 @@ def admin_add_staff():
         return render_template("admin_add_staff.html")
 
     staff_type = (request.form.get("staff_type") or "").strip().lower()
-
     if staff_type not in ("pilot", "attendant"):
         flash("Invalid staff type.", "error")
         return redirect(url_for("admin_add_staff"))
@@ -2163,18 +2838,18 @@ def admin_add_staff():
 
     try:
         with db_transaction() as (_, cursor):
-            # ensure Worker_ID does not exist anywhere
-            cursor.execute("SELECT 1 FROM Pilots WHERE Worker_ID=%s LIMIT 1", (worker_id,))
+            # SQLite: ? placeholders
+            cursor.execute("SELECT 1 FROM Pilots WHERE Worker_ID = ? LIMIT 1", (worker_id,))
             if cursor.fetchone():
                 flash("Worker ID already exists as Pilot.", "error")
                 return redirect(url_for("admin_add_staff"))
 
-            cursor.execute("SELECT 1 FROM Flight_Attendants WHERE Worker_ID=%s LIMIT 1", (worker_id,))
+            cursor.execute("SELECT 1 FROM Flight_Attendants WHERE Worker_ID = ? LIMIT 1", (worker_id,))
             if cursor.fetchone():
                 flash("Worker ID already exists as Flight Attendant.", "error")
                 return redirect(url_for("admin_add_staff"))
 
-            cursor.execute("SELECT 1 FROM Managers WHERE Worker_ID=%s LIMIT 1", (worker_id,))
+            cursor.execute("SELECT 1 FROM Managers WHERE Worker_ID = ? LIMIT 1", (worker_id,))
             if cursor.fetchone():
                 flash("Worker ID already exists as Manager.", "error")
                 return redirect(url_for("admin_add_staff"))
@@ -2185,21 +2860,22 @@ def admin_add_staff():
                     (Worker_ID, City, Street, House_Number,
                      First_Name_In_Hebrew, Last_Name_In_Hebrew,
                      Worker_Phone_Number, Start_Date, Is_Qualified)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    VALUES (?,?,?,?,?,?,?,?,?)
                 """, (
                     worker_id, city, street, house_number,
-                    first_he, last_he, phone, start_date, is_qualified))
-
+                    first_he, last_he, phone, start_date, is_qualified
+                ))
             else:
                 cursor.execute("""
                     INSERT INTO Flight_Attendants
                     (Worker_ID, City, Street, House_Number,
                      First_Name_In_Hebrew, Last_Name_In_Hebrew,
                      Worker_Phone_Number, Start_Date, Is_Qualified)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    VALUES (?,?,?,?,?,?,?,?,?)
                 """, (
                     worker_id, city, street, house_number,
-                    first_he, last_he, phone, start_date, is_qualified))
+                    first_he, last_he, phone, start_date, is_qualified
+                ))
 
         flash("Staff member added successfully.", "success")
         return redirect(url_for("admin_dashboard"))
