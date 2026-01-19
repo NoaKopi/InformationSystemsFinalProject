@@ -9,6 +9,7 @@ app = Flask(__name__)
 app.secret_key = "flytau_project_secret_key_2025!"
 app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=10),  # disconnects after 10 minutes of inactivity
+    SESSION_FILE_DIR= "/home/NoaKopi/InformationSystemsFinalProject/flask_session_data",
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
 )
@@ -16,8 +17,6 @@ app.config.update(
 # ======================================================
 # MAIN
 # ======================================================
-def main():
-    app.run(debug=True)
 
 # ======================================================
 # DB CONNECTION + CONTEXT MANAGERS (SQLite)
@@ -2295,5 +2294,4 @@ def admin_add_staff():
 # ======================================================
 # Entry point
 # ======================================================
-if __name__ == "__main__":
-    main()
+
