@@ -1,138 +1,154 @@
 -- =========================================================
--- DROP + CREATE DATABASE
+-- SQLITE VERSION (copy-paste)
 -- =========================================================
-DROP DATABASE IF EXISTS FLYTAU;
-CREATE DATABASE FLYTAU;
-USE FLYTAU;
+PRAGMA foreign_keys = ON;
 
--- ========= Workbench / Safe updates =========
-SET @OLD_SAFE_UPDATES := @@SQL_SAFE_UPDATES;
-SET SQL_SAFE_UPDATES = 0;
+-- אם את מריצה שוב ושוב, נוח להפיל טבלאות במקום DROP DATABASE
+DROP TABLE IF EXISTS Defines;
+DROP TABLE IF EXISTS Has_an_order;
+DROP TABLE IF EXISTS Flight_Attendants_Assigned_To_Flights;
+DROP TABLE IF EXISTS Pilots_Scheduled_to_Flights;
+DROP TABLE IF EXISTS Unidentified_Guests_Phone_Numbers;
+DROP TABLE IF EXISTS Registered_Clients_Phone_Numbers;
+DROP TABLE IF EXISTS Selected_Seats;
+DROP TABLE IF EXISTS Seats;
+DROP TABLE IF EXISTS Orders;
+DROP TABLE IF EXISTS Flight;
+DROP TABLE IF EXISTS Routes;
+DROP TABLE IF EXISTS Managers;
+DROP TABLE IF EXISTS Flight_Attendants;
+DROP TABLE IF EXISTS Pilots;
+DROP TABLE IF EXISTS Registered_Clients;
+DROP TABLE IF EXISTS Unidentified_Guests;
+DROP TABLE IF EXISTS Planes;
+DROP TABLE IF EXISTS Airports;
 
 -- =========================================================
 -- 1) Airports
 -- =========================================================
 CREATE TABLE Airports (
-    Airport_ID INT PRIMARY KEY,
-    Airport_Name VARCHAR(100) NOT NULL,
-    City VARCHAR(100),
-    Country VARCHAR(100)
+    Airport_ID INTEGER PRIMARY KEY,
+    Airport_Name TEXT NOT NULL,
+    City TEXT,
+    Country TEXT
 );
 
 -- =========================================================
 -- 2) Planes
 -- =========================================================
 CREATE TABLE Planes (
-    Plane_ID INT PRIMARY KEY,
-    Purchase_Date DATE,
-    Plane_Size ENUM('SMALL','LARGE') NOT NULL,
-    Manufacturer ENUM('Boeing','Airbus','Dassault') NOT NULL
+    Plane_ID INTEGER PRIMARY KEY,
+    Purchase_Date TEXT,
+    Plane_Size TEXT NOT NULL CHECK (Plane_Size IN ('SMALL','LARGE')),
+    Manufacturer TEXT NOT NULL CHECK (Manufacturer IN ('Boeing','Airbus','Dassault'))
 );
 
 -- =========================================================
 -- 3) Unidentified Guests
 -- =========================================================
 CREATE TABLE Unidentified_Guests (
-    Email_Address VARCHAR(100) PRIMARY KEY,
-    First_Name_In_English VARCHAR(50),
-    Last_Name_In_English VARCHAR(50)
+    Email_Address TEXT PRIMARY KEY,
+    First_Name_In_English TEXT,
+    Last_Name_In_English TEXT
 );
 
 -- =========================================================
 -- 4) Registered Clients
 -- =========================================================
 CREATE TABLE Registered_Clients (
-    Passport_ID VARCHAR(20) PRIMARY KEY,
-    Registered_Clients_Email_Address VARCHAR(100) UNIQUE NOT NULL,
-    First_Name_In_English VARCHAR(50),
-    Last_Name_In_English VARCHAR(50),
-    Date_Of_Birth DATE,
-    Client_Password VARCHAR(255),
-    Registration_Date DATETIME DEFAULT CURRENT_TIMESTAMP
+    Passport_ID TEXT PRIMARY KEY,
+    Registered_Clients_Email_Address TEXT UNIQUE NOT NULL,
+    First_Name_In_English TEXT,
+    Last_Name_In_English TEXT,
+    Date_Of_Birth TEXT,
+    Client_Password TEXT,
+    Registration_Date TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 -- =========================================================
 -- 5) Workers
 -- =========================================================
 CREATE TABLE Pilots (
-    Worker_ID INT PRIMARY KEY,
-    City VARCHAR(50),
-    Street VARCHAR(50),
-    House_Number INT,
-    First_Name_In_Hebrew VARCHAR(50),
-    Last_Name_In_Hebrew VARCHAR(50),
-    Worker_Phone_Number VARCHAR(15),
-    Start_Date DATE,
-    Is_Qualified BOOLEAN
+    Worker_ID INTEGER PRIMARY KEY,
+    City TEXT,
+    Street TEXT,
+    House_Number INTEGER,
+    First_Name_In_Hebrew TEXT,
+    Last_Name_In_Hebrew TEXT,
+    Worker_Phone_Number TEXT,
+    Start_Date TEXT,
+    Is_Qualified INTEGER CHECK (Is_Qualified IN (0,1))
 );
 
 CREATE TABLE Flight_Attendants (
-    Worker_ID INT PRIMARY KEY,
-    City VARCHAR(50),
-    Street VARCHAR(50),
-    House_Number INT,
-    First_Name_In_Hebrew VARCHAR(50),
-    Last_Name_In_Hebrew VARCHAR(50),
-    Worker_Phone_Number VARCHAR(15),
-    Start_Date DATE,
-    Is_Qualified BOOLEAN
+    Worker_ID INTEGER PRIMARY KEY,
+    City TEXT,
+    Street TEXT,
+    House_Number INTEGER,
+    First_Name_In_Hebrew TEXT,
+    Last_Name_In_Hebrew TEXT,
+    Worker_Phone_Number TEXT,
+    Start_Date TEXT,
+    Is_Qualified INTEGER CHECK (Is_Qualified IN (0,1))
 );
 
 CREATE TABLE Managers (
-    Worker_ID INT PRIMARY KEY,
-    City VARCHAR(50),
-    Street VARCHAR(50),
-    House_Number INT,
-    First_Name_In_Hebrew VARCHAR(50),
-    Last_Name_In_Hebrew VARCHAR(50),
-    Worker_Phone_Number VARCHAR(15),
-    Start_Date DATE,
-    Manager_Password VARCHAR(255),
-    Manager_First_Name_In_English VARCHAR(50),
-    Manager_Last_Name_In_English VARCHAR(50)
+    Worker_ID INTEGER PRIMARY KEY,
+    City TEXT,
+    Street TEXT,
+    House_Number INTEGER,
+    First_Name_In_Hebrew TEXT,
+    Last_Name_In_Hebrew TEXT,
+    Worker_Phone_Number TEXT,
+    Start_Date TEXT,
+    Manager_Password TEXT,
+    Manager_First_Name_In_English TEXT,
+    Manager_Last_Name_In_English TEXT
 );
 
 -- =========================================================
 -- 6) Routes
 -- =========================================================
 CREATE TABLE Routes (
-    Origin_Airport INT,
-    Destination_Airport INT,
-    Duration TIME,
+    Origin_Airport INTEGER,
+    Destination_Airport INTEGER,
+    Duration TEXT,
     PRIMARY KEY (Origin_Airport, Destination_Airport),
     FOREIGN KEY (Origin_Airport) REFERENCES Airports(Airport_ID),
     FOREIGN KEY (Destination_Airport) REFERENCES Airports(Airport_ID)
 );
 
 -- =========================================================
--- 7) Flight  ✅ statuses aligned to utils.py
+-- 7) Flight
 -- =========================================================
 CREATE TABLE Flight (
-    Flight_ID INT PRIMARY KEY,
-    Plane_ID INT NOT NULL,
-    Origin_Airport INT NOT NULL,
-    Destination_Airport INT NOT NULL,
-    Departure_Time TIME NOT NULL,
-    Departure_Date DATE NOT NULL,
-    Economy_Price DECIMAL(10,2) NOT NULL,
-    Business_Price DECIMAL(10,2) NOT NULL,
-    Flight_Status ENUM('active','cancelled','done','full') NOT NULL DEFAULT 'active',
+    Flight_ID INTEGER PRIMARY KEY,
+    Plane_ID INTEGER NOT NULL,
+    Origin_Airport INTEGER NOT NULL,
+    Destination_Airport INTEGER NOT NULL,
+    Departure_Time TEXT NOT NULL,
+    Departure_Date TEXT NOT NULL,
+    Economy_Price REAL NOT NULL,
+    Business_Price REAL NOT NULL,
+    Flight_Status TEXT NOT NULL DEFAULT 'active'
+        CHECK (Flight_Status IN ('active','cancelled','done','full')),
     FOREIGN KEY (Plane_ID) REFERENCES Planes(Plane_ID),
     FOREIGN KEY (Origin_Airport) REFERENCES Airports(Airport_ID),
     FOREIGN KEY (Destination_Airport) REFERENCES Airports(Airport_ID)
 );
 
 -- =========================================================
--- 8) Orders  ✅ statuses aligned to utils.py
+-- 8) Orders
 -- =========================================================
 CREATE TABLE Orders (
-    Unique_Order_ID INT PRIMARY KEY,
-    Flight_ID INT NOT NULL,
-    Registered_Clients_Email_Address VARCHAR(100) NULL,
-    Unidentified_Guest_Email_Address VARCHAR(100) NULL,
-    Date_Of_Order DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    Order_Status ENUM('active','done','systemcancellation','customercancellation')
-        NOT NULL DEFAULT 'active',
+    Unique_Order_ID INTEGER PRIMARY KEY,
+    Flight_ID INTEGER NOT NULL,
+    Registered_Clients_Email_Address TEXT NULL,
+    Unidentified_Guest_Email_Address TEXT NULL,
+    Date_Of_Order TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    Order_Status TEXT NOT NULL DEFAULT 'active'
+        CHECK (Order_Status IN ('active','done','systemcancellation','customercancellation')),
+    Final_Total REAL NOT NULL DEFAULT 0.00,
     FOREIGN KEY (Flight_ID) REFERENCES Flight(Flight_ID),
     FOREIGN KEY (Registered_Clients_Email_Address)
         REFERENCES Registered_Clients(Registered_Clients_Email_Address),
@@ -149,10 +165,10 @@ CREATE TABLE Orders (
 -- 9) Seats
 -- =========================================================
 CREATE TABLE Seats (
-    Plane_ID INT,
-    Column_Number CHAR(1),
-    Row_Num INT,
-    Class ENUM('Economy','Business') NOT NULL,
+    Plane_ID INTEGER,
+    Column_Number TEXT,
+    Row_Num INTEGER,
+    Class TEXT NOT NULL CHECK (Class IN ('Economy','Business')),
     PRIMARY KEY (Plane_ID, Column_Number, Row_Num),
     FOREIGN KEY (Plane_ID) REFERENCES Planes(Plane_ID)
 );
@@ -161,11 +177,11 @@ CREATE TABLE Seats (
 -- 10) Selected_Seats
 -- =========================================================
 CREATE TABLE Selected_Seats (
-    Plane_ID INT,
-    Unique_Order_ID INT,
-    Column_Number CHAR(1),
-    Row_Num INT,
-    Is_Occupied BOOLEAN DEFAULT TRUE,
+    Plane_ID INTEGER,
+    Unique_Order_ID INTEGER,
+    Column_Number TEXT,
+    Row_Num INTEGER,
+    Is_Occupied INTEGER DEFAULT 1 CHECK (Is_Occupied IN (0,1)),
     PRIMARY KEY (Plane_ID, Unique_Order_ID, Column_Number, Row_Num),
     FOREIGN KEY (Plane_ID) REFERENCES Planes(Plane_ID),
     FOREIGN KEY (Unique_Order_ID) REFERENCES Orders(Unique_Order_ID),
@@ -177,15 +193,15 @@ CREATE TABLE Selected_Seats (
 -- 11) Phone Numbers
 -- =========================================================
 CREATE TABLE Registered_Clients_Phone_Numbers (
-    Passport_ID VARCHAR(20),
-    Phone_Numbers VARCHAR(30),
+    Passport_ID TEXT,
+    Phone_Numbers TEXT,
     PRIMARY KEY (Passport_ID, Phone_Numbers),
     FOREIGN KEY (Passport_ID) REFERENCES Registered_Clients(Passport_ID)
 );
 
 CREATE TABLE Unidentified_Guests_Phone_Numbers (
-    Unidentified_Guest_Email_Address VARCHAR(100),
-    Phone_Numbers VARCHAR(30),
+    Unidentified_Guest_Email_Address TEXT,
+    Phone_Numbers TEXT,
     PRIMARY KEY (Unidentified_Guest_Email_Address, Phone_Numbers),
     FOREIGN KEY (Unidentified_Guest_Email_Address)
         REFERENCES Unidentified_Guests(Email_Address)
@@ -195,16 +211,16 @@ CREATE TABLE Unidentified_Guests_Phone_Numbers (
 -- 12) Workers assigned to flights
 -- =========================================================
 CREATE TABLE Pilots_Scheduled_to_Flights (
-    Worker_ID INT,
-    Flight_ID INT,
+    Worker_ID INTEGER,
+    Flight_ID INTEGER,
     PRIMARY KEY (Worker_ID, Flight_ID),
     FOREIGN KEY (Worker_ID) REFERENCES Pilots(Worker_ID),
     FOREIGN KEY (Flight_ID) REFERENCES Flight(Flight_ID)
 );
 
 CREATE TABLE Flight_Attendants_Assigned_To_Flights (
-    Worker_ID INT,
-    Flight_ID INT,
+    Worker_ID INTEGER,
+    Flight_ID INTEGER,
     PRIMARY KEY (Worker_ID, Flight_ID),
     FOREIGN KEY (Worker_ID) REFERENCES Flight_Attendants(Worker_ID),
     FOREIGN KEY (Flight_ID) REFERENCES Flight(Flight_ID)
@@ -214,9 +230,9 @@ CREATE TABLE Flight_Attendants_Assigned_To_Flights (
 -- 13) Has_an_order
 -- =========================================================
 CREATE TABLE Has_an_order (
-    Email_Address VARCHAR(100),
-    Unique_Order_ID INT,
-    Quantity_of_tickets INT NOT NULL,
+    Email_Address TEXT,
+    Unique_Order_ID INTEGER,
+    Quantity_of_tickets INTEGER NOT NULL,
     PRIMARY KEY (Email_Address, Unique_Order_ID),
     FOREIGN KEY (Unique_Order_ID) REFERENCES Orders(Unique_Order_ID)
 );
@@ -225,9 +241,9 @@ CREATE TABLE Has_an_order (
 -- 14) Defines
 -- =========================================================
 CREATE TABLE Defines (
-    Origin_Airport INT,
-    Destination_Airport INT,
-    Airport_ID INT,
+    Origin_Airport INTEGER,
+    Destination_Airport INTEGER,
+    Airport_ID INTEGER,
     PRIMARY KEY (Origin_Airport, Destination_Airport, Airport_ID),
     FOREIGN KEY (Origin_Airport) REFERENCES Airports(Airport_ID),
     FOREIGN KEY (Destination_Airport) REFERENCES Airports(Airport_ID),
@@ -262,10 +278,6 @@ INSERT INTO Airports (Airport_ID, Airport_Name, City, Country) VALUES
 (20,'Narita International Airport','Tokyo','Japan');
 
 -- Planes
--- הגדרה לפי Seats (utils): LARGE = יש Business seats ; SMALL = רק Economy
--- SMALL planes: 101,103,107,108
--- LARGE planes: 102,104,105,106,109,110
--- ✅ תיקון הכרחי: Plane_Size הוא ENUM ולכן חייב להיות 'SMALL'/'LARGE' ולא מספר
 INSERT INTO Planes (Plane_ID, Purchase_Date, Plane_Size, Manufacturer) VALUES
 (101,'2016-03-12','SMALL','Boeing'),
 (102,'2017-08-25','LARGE','Airbus'),
@@ -278,7 +290,7 @@ INSERT INTO Planes (Plane_ID, Purchase_Date, Plane_Size, Manufacturer) VALUES
 (109,'2013-07-18','LARGE','Boeing'),
 (110,'2012-05-09','LARGE','Airbus');
 
--- Routes
+-- Routes (seed)
 INSERT INTO Routes (Origin_Airport, Destination_Airport, Duration) VALUES
 (1,3,'05:10:00'),
 (1,4,'04:55:00'),
@@ -291,11 +303,12 @@ INSERT INTO Routes (Origin_Airport, Destination_Airport, Duration) VALUES
 (19,20,'04:30:00'),
 (15,1,'02:10:00');
 
+-- fill missing routes with 00:00:00
 INSERT INTO Routes (Origin_Airport, Destination_Airport, Duration)
 SELECT
-  a1.Airport_ID AS Origin_Airport,
-  a2.Airport_ID AS Destination_Airport,
-  '00:00:00'    AS Duration
+  a1.Airport_ID,
+  a2.Airport_ID,
+  '00:00:00'
 FROM Airports a1
 JOIN Airports a2
   ON a1.Airport_ID <> a2.Airport_ID
@@ -304,53 +317,63 @@ LEFT JOIN Routes r
  AND r.Destination_Airport = a2.Airport_ID
 WHERE r.Origin_Airport IS NULL;
 
-UPDATE Routes r
-JOIN Airports ao ON ao.Airport_ID = r.Origin_Airport
-JOIN Airports ad ON ad.Airport_ID = r.Destination_Airport
-SET r.Duration =
-  CASE
-    WHEN ao.Country = ad.Country THEN '01:00:00'
-    WHEN ao.Country IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
-     AND ad.Country IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
-      THEN '02:15:00'
-    WHEN ao.Country IN ('Israel','United Arab Emirates','Turkey','Egypt')
-     AND ad.Country IN ('Israel','United Arab Emirates','Turkey','Egypt')
-      THEN '03:00:00'
-    WHEN ao.Country IN ('China','Japan','Singapore')
-     AND ad.Country IN ('China','Japan','Singapore')
-      THEN '04:30:00'
-    WHEN ao.Country IN ('United States','Canada')
-     AND ad.Country IN ('United States','Canada')
-      THEN '05:00:00'
-    WHEN (ao.Country IN ('Israel','United Arab Emirates','Turkey','Egypt')
-      AND ad.Country IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece'))
-      OR (ad.Country IN ('Israel','United Arab Emirates','Turkey','Egypt')
-      AND ao.Country IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece'))
-      THEN '04:00:00'
-    WHEN (ao.Country IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
-      AND ad.Country IN ('United States','Canada'))
-      OR (ad.Country IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
-      AND ao.Country IN ('United States','Canada'))
-      THEN '08:45:00'
-    WHEN (ao.Country IN ('Israel','United Arab Emirates','Turkey','Egypt')
-      AND ad.Country IN ('United States','Canada'))
-      OR (ad.Country IN ('Israel','United Arab Emirates','Turkey','Egypt')
-      AND ao.Country IN ('United States','Canada'))
-      THEN '12:00:00'
-    WHEN (ao.Country IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
-      AND ad.Country IN ('China','Japan','Singapore'))
-      OR (ad.Country IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
-      AND ao.Country IN ('China','Japan','Singapore'))
-      THEN '11:30:00'
-    WHEN (ao.Country IN ('Israel','United Arab Emirates','Turkey','Egypt')
-      AND ad.Country IN ('China','Japan','Singapore'))
-      OR (ad.Country IN ('Israel','United Arab Emirates','Turkey','Egypt')
-      AND ao.Country IN ('China','Japan','Singapore'))
-      THEN '13:00:00'
-    ELSE '06:00:00'
-  END;
+-- SQLite: rewrite UPDATE...JOIN using a CTE + correlated update
+WITH rc AS (
+  SELECT
+    rowid AS rid,
+    (SELECT Country FROM Airports WHERE Airport_ID = Origin_Airport)      AS oc,
+    (SELECT Country FROM Airports WHERE Airport_ID = Destination_Airport) AS dc
+  FROM Routes
+)
+UPDATE Routes
+SET Duration = (
+  SELECT
+    CASE
+      WHEN oc = dc THEN '01:00:00'
+      WHEN oc IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
+       AND dc IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
+        THEN '02:15:00'
+      WHEN oc IN ('Israel','United Arab Emirates','Turkey','Egypt')
+       AND dc IN ('Israel','United Arab Emirates','Turkey','Egypt')
+        THEN '03:00:00'
+      WHEN oc IN ('China','Japan','Singapore')
+       AND dc IN ('China','Japan','Singapore')
+        THEN '04:30:00'
+      WHEN oc IN ('United States','Canada')
+       AND dc IN ('United States','Canada')
+        THEN '05:00:00'
+      WHEN (oc IN ('Israel','United Arab Emirates','Turkey','Egypt')
+        AND dc IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece'))
+        OR (dc IN ('Israel','United Arab Emirates','Turkey','Egypt')
+        AND oc IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece'))
+        THEN '04:00:00'
+      WHEN (oc IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
+        AND dc IN ('United States','Canada'))
+        OR (dc IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
+        AND oc IN ('United States','Canada'))
+        THEN '08:45:00'
+      WHEN (oc IN ('Israel','United Arab Emirates','Turkey','Egypt')
+        AND dc IN ('United States','Canada'))
+        OR (dc IN ('Israel','United Arab Emirates','Turkey','Egypt')
+        AND oc IN ('United States','Canada'))
+        THEN '12:00:00'
+      WHEN (oc IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
+        AND dc IN ('China','Japan','Singapore'))
+        OR (dc IN ('United Kingdom','France','Germany','Netherlands','Spain','Italy','Switzerland','Austria','Greece')
+        AND oc IN ('China','Japan','Singapore'))
+        THEN '11:30:00'
+      WHEN (oc IN ('Israel','United Arab Emirates','Turkey','Egypt')
+        AND dc IN ('China','Japan','Singapore'))
+        OR (dc IN ('Israel','United Arab Emirates','Turkey','Egypt')
+        AND oc IN ('China','Japan','Singapore'))
+        THEN '13:00:00'
+      ELSE '06:00:00'
+    END
+  FROM rc
+  WHERE rc.rid = Routes.rowid
+);
 
--- Defines
+-- Defines (seed)
 INSERT INTO Defines (Origin_Airport, Destination_Airport, Airport_ID) VALUES
 (1,3,1),
 (1,4,1),
@@ -363,11 +386,12 @@ INSERT INTO Defines (Origin_Airport, Destination_Airport, Airport_ID) VALUES
 (19,20,19),
 (15,1,15);
 
+-- fill missing defines
 INSERT INTO Defines (Origin_Airport, Destination_Airport, Airport_ID)
 SELECT
   r.Origin_Airport,
   r.Destination_Airport,
-  r.Origin_Airport AS Airport_ID
+  r.Origin_Airport
 FROM Routes r
 LEFT JOIN Defines d
   ON d.Origin_Airport = r.Origin_Airport
@@ -417,10 +441,10 @@ INSERT INTO Unidentified_Guests_Phone_Numbers (Unidentified_Guest_Email_Address,
 ('guest05@mail.com','+34-611-222-333');
 
 -- =========================================================
--- SEATS  ✅ Business רק ל-LARGE PLANES (לפי הרשימה)
+-- SEATS  (TEMP tables are supported in SQLite)
 -- =========================================================
-DROP TEMPORARY TABLE IF EXISTS tmp_numbers;
-CREATE TEMPORARY TABLE tmp_numbers (n INT PRIMARY KEY);
+DROP TABLE IF EXISTS tmp_numbers;
+CREATE TEMP TABLE tmp_numbers (n INTEGER PRIMARY KEY);
 
 INSERT INTO tmp_numbers (n) VALUES
 (1),(2),(3),(4),(5),
@@ -437,7 +461,7 @@ SELECT
     CASE
         WHEN p.Plane_ID IN (102,104,105,106,109,110) AND t.n <= 5 THEN 'Business'
         ELSE 'Economy'
-    END AS Class
+    END
 FROM Planes p
 JOIN tmp_numbers t
 JOIN (
@@ -447,19 +471,16 @@ JOIN (
     UNION ALL SELECT 'D'
 ) c;
 
-
-UPDATE Planes p
-SET p.Plane_Size =
+UPDATE Planes
+SET Plane_Size =
   CASE
     WHEN EXISTS (
-      SELECT 1
-      FROM Seats s
-      WHERE s.Plane_ID = p.Plane_ID
+      SELECT 1 FROM Seats s
+      WHERE s.Plane_ID = Planes.Plane_ID
         AND s.Class = 'Business'
     ) THEN 'LARGE'
     ELSE 'SMALL'
   END;
-
 
 -- =========================================================
 -- FLIGHTS
@@ -542,9 +563,7 @@ INSERT INTO Orders
 (9009,5021,NULL,'guest03@mail.com','active'),
 (9010,5022,'laura.diaz@mail.com',NULL,'active');
 
--- =========================================================
 -- Has_an_order
--- =========================================================
 INSERT INTO Has_an_order (Email_Address, Unique_Order_ID, Quantity_of_tickets) VALUES
 ('alice.kim@mail.com',9001,2),
 ('john.smith@mail.com',9002,1),
@@ -557,9 +576,7 @@ INSERT INTO Has_an_order (Email_Address, Unique_Order_ID, Quantity_of_tickets) V
 ('guest03@mail.com',9009,2),
 ('laura.diaz@mail.com',9010,5);
 
--- =========================================================
--- Selected_Seats
--- =========================================================
+-- Selected_Seats (BOOLEAN -> 0/1)
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied) VALUES
 (101,9001,'A',1,1),
 (101,9001,'B',1,1),
@@ -572,9 +589,7 @@ INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, I
 (101,9009,'C',7,1),
 (102,9010,'D',5,1);
 
--- =========================================================
--- MANAGERS (Admins) ✅ needed for admin login
--- =========================================================
+-- Managers
 INSERT INTO Managers
 (Worker_ID, City, Street, House_Number,
  First_Name_In_Hebrew, Last_Name_In_Hebrew,
@@ -584,9 +599,7 @@ VALUES
 (7001, 'Tel Aviv', 'Ibn Gabirol', 10, 'מיכל', 'קופילוביץ', '050-1234567', '2024-01-01', 'admin123', 'Michal', 'Admin'),
 (7002, 'Jerusalem', 'Jaffa', 25, 'נועה', 'כהן', '052-7654321', '2024-02-15', 'admin123', 'Noa', 'Admin');
 
--- =========================================================
--- PILOTS
--- =========================================================
+-- Pilots
 INSERT INTO Pilots
 (Worker_ID, City, Street, House_Number, First_Name_In_Hebrew, Last_Name_In_Hebrew,
  Worker_Phone_Number, Start_Date, Is_Qualified)
@@ -602,9 +615,7 @@ VALUES
 (3013,'Haifa','Hanasi',18,'עידו','דגן','050-3001013','2024-01-05',0),
 (3014,'Petah Tikva','Haim Ozer',11,'אלעד','קציר','050-3001014','2021-12-28',0);
 
--- =========================================================
--- FLIGHT ATTENDANTS
--- =========================================================
+-- Flight Attendants
 INSERT INTO Flight_Attendants
 (Worker_ID, City, Street, House_Number, First_Name_In_Hebrew, Last_Name_In_Hebrew,
  Worker_Phone_Number, Start_Date, Is_Qualified)
@@ -626,13 +637,10 @@ VALUES
 (4015,'Netanya','Pinsker',5,'יובל','לביא','050-4001015','2020-01-01',0);
 
 -- =========================================================
--- Orders Final_Total (כמו אצלך)
+-- Recalculate Final_Total (SQLite-compatible: no UPDATE...JOIN)
 -- =========================================================
-ALTER TABLE Orders
-  ADD COLUMN Final_Total DECIMAL(10,2) NOT NULL DEFAULT 0.00;
-
-DROP TEMPORARY TABLE IF EXISTS tmp_order_totals;
-CREATE TEMPORARY TABLE tmp_order_totals AS
+DROP TABLE IF EXISTS tmp_order_totals;
+CREATE TEMP TABLE tmp_order_totals AS
 SELECT
     o.Unique_Order_ID,
     ROUND(SUM(
@@ -650,33 +658,17 @@ JOIN Seats s
  AND s.Column_Number = ss.Column_Number
 GROUP BY o.Unique_Order_ID;
 
-
-UPDATE Orders o
-LEFT JOIN tmp_order_totals t ON t.Unique_Order_ID = o.Unique_Order_ID
-SET o.Final_Total =
-    CASE
-        WHEN o.Order_Status = 'systemcancellation' THEN 0.00
-        WHEN o.Order_Status = 'customercancellation' THEN ROUND(COALESCE(t.seats_total, 0.00) * 0.05, 2)
-        ELSE COALESCE(t.seats_total, 0.00)
-    END
-WHERE o.Unique_Order_ID > 0;
-
 UPDATE Orders
-SET Final_Total = ROUND(Final_Total * 0.05, 2)
-WHERE Unique_Order_ID IN (
-    SELECT Unique_Order_ID
-    FROM (
-        SELECT Unique_Order_ID
-        FROM Orders
-        WHERE Order_Status = 'customercancellation'
-          AND Final_Total > 0
-    ) AS tmp
-);
+SET Final_Total =
+    CASE
+        WHEN Order_Status = 'systemcancellation' THEN 0.00
+        WHEN Order_Status = 'customercancellation' THEN ROUND(COALESCE((SELECT seats_total FROM tmp_order_totals t WHERE t.Unique_Order_ID = Orders.Unique_Order_ID), 0.00) * 0.05, 2)
+        ELSE COALESCE((SELECT seats_total FROM tmp_order_totals t WHERE t.Unique_Order_ID = Orders.Unique_Order_ID), 0.00)
+    END;
 
 -- =========================================================
--- EXTRA DONE FLIGHTS + ORDERS + SEATS (כמו אצלך)
+-- EXTRA DONE FLIGHTS + ORDERS + SEATS (as you had)
 -- =========================================================
-
 INSERT INTO Flight
 (Flight_ID, Plane_ID, Origin_Airport, Destination_Airport, Departure_Time, Departure_Date, Economy_Price, Business_Price, Flight_Status)
 VALUES
@@ -685,7 +677,6 @@ VALUES
 (6003,109,2,3,'08:15:00','2025-12-15',420.00,1400.00,'done'),
 (6004,106,3,5,'16:40:00','2025-12-20',150.00,520.00,'done'),
 (6005,108,18,19,'21:10:00','2025-12-28',240.00,820.00,'done'),
-
 (6006,109,1,9,'07:45:00','2026-01-03',230.00,840.00,'done'),
 (6007,106,15,1,'12:05:00','2026-01-08',170.00,560.00,'done'),
 (6008,101,3,4,'18:25:00','2026-01-12',125.00,430.00,'done'),
@@ -712,7 +703,6 @@ INSERT INTO Has_an_order (Email_Address, Unique_Order_ID, Quantity_of_tickets) V
 ('sara.lee@mail.com',  9203, 30),
 ('david.ng@mail.com',  9204, 30),
 ('guest01@mail.com',   9205, 30),
-
 ('nina.patel@mail.com', 9206, 50),
 ('mark.brown@mail.com', 9207, 50),
 ('laura.diaz@mail.com', 9208, 50),
@@ -720,146 +710,117 @@ INSERT INTO Has_an_order (Email_Address, Unique_Order_ID, Quantity_of_tickets) V
 ('robert.jones@mail.com',9210,50);
 
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9201, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9201, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 108
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 30;
 
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9202, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9202, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 101
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 30;
 
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9203, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9203, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 109
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 30;
 
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9204, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9204, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 106
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 30;
 
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9205, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9205, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 108
 ORDER BY s.Row_Num DESC, s.Column_Number DESC
 LIMIT 30;
 
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9206, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9206, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 109
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 50;
 
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9207, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9207, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 106
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 50;
 
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9208, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9208, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 101
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 50;
 
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9209, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9209, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 108
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 50;
 
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9210, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9210, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 109
 ORDER BY s.Row_Num DESC, s.Column_Number DESC
 LIMIT 50;
 
-SET SQL_SAFE_UPDATES = @OLD_SAFE_UPDATES;
-
-
 -- =========================================================
--- EXTRA: Last 6 months (DONE + CANCELLED) + Crew assignments
--- Months covered: 2025-08 .. 2026-01
+-- EXTRA: Last 6 months + crew + orders (your block)
 -- =========================================================
 
--- ---------------------------------------------------------
--- A) Add flights (DONE + CANCELLED) in last 6 months
--- ---------------------------------------------------------
 INSERT INTO Flight
 (Flight_ID, Plane_ID, Origin_Airport, Destination_Airport, Departure_Time, Departure_Date, Economy_Price, Business_Price, Flight_Status)
 VALUES
--- 2025-08
 (6101,102,1,3,'09:10:00','2025-08-05',330.00,1050.00,'done'),
 (6102,104,3,4,'13:40:00','2025-08-18',125.00,440.00,'cancelled'),
 (6103,108,1,4,'18:25:00','2025-08-25',265.00,875.00,'done'),
-
--- 2025-09
 (6111,109,2,3,'08:00:00','2025-09-03',425.00,1410.00,'done'),
 (6112,105,9,18,'20:10:00','2025-09-14',515.00,1630.00,'cancelled'),
 (6113,101,3,5,'10:30:00','2025-09-22',145.00,480.00,'done'),
-
--- 2025-10
 (6121,106,15,1,'07:50:00','2025-10-06',165.00,545.00,'done'),
 (6122,110,19,20,'21:05:00','2025-10-16',310.00,1010.00,'cancelled'),
 (6123,108,18,19,'12:15:00','2025-10-28',245.00,835.00,'done'),
-
--- 2025-11
 (6131,104,1,9,'14:20:00','2025-11-04',230.00,840.00,'done'),
 (6132,102,1,3,'19:40:00','2025-11-12',335.00,1040.00,'cancelled'),
 (6133,109,3,4,'08:35:00','2025-11-23',130.00,450.00,'done'),
-
--- 2025-12 (בנוסף למה שכבר יש לך)
 (6141,105,1,4,'09:00:00','2025-12-02',275.00,910.00,'cancelled'),
 (6142,106,9,18,'16:10:00','2025-12-11',505.00,1600.00,'done'),
 (6143,101,1,9,'20:30:00','2025-12-19',215.00,790.00,'done'),
-
--- 2026-01 (עדיין "חצי שנה אחרונה" ביחס לנתונים אצלך)
 (6151,110,2,3,'11:45:00','2026-01-06',415.00,1360.00,'cancelled'),
 (6152,109,1,4,'08:10:00','2026-01-15',305.00,1005.00,'done'),
 (6153,108,3,4,'18:55:00','2026-01-17',125.00,430.00,'done');
-
--- ---------------------------------------------------------
--- B) Crew assignments (2 pilots + 3 attendants per flight)
--- ---------------------------------------------------------
--- pilots rotation: 3001..3006
--- attendants rotation: 4001..4010
 
 INSERT INTO Pilots_Scheduled_to_Flights (Worker_ID, Flight_ID) VALUES
 (3001,6101),(3002,6101),
 (3003,6102),(3004,6102),
 (3005,6103),(3006,6103),
-
 (3001,6111),(3003,6111),
 (3002,6112),(3004,6112),
 (3005,6113),(3006,6113),
-
 (3001,6121),(3004,6121),
 (3002,6122),(3005,6122),
 (3003,6123),(3006,6123),
-
 (3001,6131),(3002,6131),
 (3003,6132),(3004,6132),
 (3005,6133),(3006,6133),
-
 (3002,6141),(3003,6141),
 (3004,6142),(3005,6142),
 (3001,6143),(3006,6143),
-
 (3002,6151),(3006,6151),
 (3003,6152),(3005,6152),
 (3001,6153),(3004,6153);
@@ -868,185 +829,139 @@ INSERT INTO Flight_Attendants_Assigned_To_Flights (Worker_ID, Flight_ID) VALUES
 (4001,6101),(4002,6101),(4003,6101),
 (4004,6102),(4005,6102),(4006,6102),
 (4007,6103),(4008,6103),(4009,6103),
-
 (4001,6111),(4002,6111),(4010,6111),
 (4003,6112),(4004,6112),(4005,6112),
 (4006,6113),(4007,6113),(4008,6113),
-
 (4009,6121),(4010,6121),(4001,6121),
 (4002,6122),(4003,6122),(4004,6122),
 (4005,6123),(4006,6123),(4007,6123),
-
 (4008,6131),(4009,6131),(4010,6131),
 (4001,6132),(4002,6132),(4003,6132),
 (4004,6133),(4005,6133),(4006,6133),
-
 (4007,6141),(4008,6141),(4009,6141),
 (4010,6142),(4001,6142),(4002,6142),
 (4003,6143),(4004,6143),(4005,6143),
-
 (4006,6151),(4007,6151),(4008,6151),
 (4009,6152),(4010,6152),(4001,6152),
 (4002,6153),(4003,6153),(4004,6153);
 
--- ---------------------------------------------------------
--- C) Orders + Has_an_order + Selected_Seats for DONE flights only
---    (so occupancy/revenue reports look good)
---    We also set Date_Of_Order in the relevant months.
--- ---------------------------------------------------------
-
--- DONE flights: 6101,6103,6111,6113,6121,6123,6131,6133,6142,6143,6152,6153
-
 INSERT INTO Orders
 (Unique_Order_ID, Flight_ID, Registered_Clients_Email_Address, Unidentified_Guest_Email_Address, Date_Of_Order, Order_Status)
 VALUES
--- 2025-08
 (9301,6101,'alice.kim@mail.com',NULL,'2025-08-01 10:00:00','done'),
 (9302,6103,NULL,'guest04@mail.com','2025-08-20 12:30:00','active'),
-
--- 2025-09
 (9311,6111,'john.smith@mail.com',NULL,'2025-09-01 09:15:00','done'),
 (9312,6113,'laura.diaz@mail.com',NULL,'2025-09-18 18:10:00','customercancellation'),
-
--- 2025-10
 (9321,6121,'mark.brown@mail.com',NULL,'2025-10-02 11:20:00','done'),
 (9322,6123,NULL,'guest02@mail.com','2025-10-22 20:05:00','active'),
-
--- 2025-11
 (9331,6131,'nina.patel@mail.com',NULL,'2025-11-01 08:00:00','done'),
 (9332,6133,'sara.lee@mail.com',NULL,'2025-11-20 14:45:00','systemcancellation'),
-
--- 2025-12
 (9341,6142,'david.ng@mail.com',NULL,'2025-12-06 16:00:00','done'),
 (9342,6143,NULL,'guest01@mail.com','2025-12-15 09:30:00','active'),
-
--- 2026-01
 (9351,6152,'robert.jones@mail.com',NULL,'2026-01-10 13:10:00','done'),
 (9352,6153,NULL,'guest03@mail.com','2026-01-14 17:40:00','customercancellation');
 
 INSERT INTO Has_an_order (Email_Address, Unique_Order_ID, Quantity_of_tickets) VALUES
 ('alice.kim@mail.com',9301,18),
 ('guest04@mail.com',9302,22),
-
 ('john.smith@mail.com',9311,40),
 ('laura.diaz@mail.com',9312,10),
-
 ('mark.brown@mail.com',9321,28),
 ('guest02@mail.com',9322,35),
-
 ('nina.patel@mail.com',9331,45),
 ('sara.lee@mail.com',9332,12),
-
 ('david.ng@mail.com',9341,30),
 ('guest01@mail.com',9342,26),
-
 ('robert.jones@mail.com',9351,38),
 ('guest03@mail.com',9352,14);
 
--- helper: insert first N seats for a given plane into Selected_Seats for a given order
--- (we use ORDER BY to ensure deterministic seats)
-
--- 9301 plane 102 (LARGE) - 18 seats
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9301, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9301, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 102
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 18;
 
--- 9302 plane 108 (SMALL) - 22 seats
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9302, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9302, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 108
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 22;
 
--- 9311 plane 109 (LARGE) - 40 seats
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9311, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9311, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 109
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 40;
 
--- 9312 plane 101 (SMALL) - 10 seats (customer cancellation still has seats selected)
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9312, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9312, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 101
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 10;
 
--- 9321 plane 106 (LARGE) - 28 seats
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9321, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9321, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 106
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 28;
 
--- 9322 plane 108 (SMALL) - 35 seats (יש 100 seats, אז אפשר)
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9322, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9322, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 108
 ORDER BY s.Row_Num DESC, s.Column_Number DESC
 LIMIT 35;
 
--- 9331 plane 104 (LARGE) - 45 seats
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9331, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9331, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 104
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 45;
 
--- 9332 plane 109 (LARGE) - 12 seats (system cancellation -> revenue 0, but still selected seats exist)
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9332, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9332, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 109
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 12;
 
--- 9341 plane 106 (LARGE) - 30 seats
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9341, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9341, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 106
 ORDER BY s.Row_Num DESC, s.Column_Number DESC
 LIMIT 30;
 
--- 9342 plane 101 (SMALL) - 26 seats
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9342, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9342, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 101
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 26;
 
--- 9351 plane 109 (LARGE) - 38 seats
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9351, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9351, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 109
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 38;
 
--- 9352 plane 108 (SMALL) - 14 seats (customer cancellation)
 INSERT INTO Selected_Seats (Plane_ID, Unique_Order_ID, Column_Number, Row_Num, Is_Occupied)
-SELECT s.Plane_ID, 9352, s.Column_Number, s.Row_Num, TRUE
+SELECT s.Plane_ID, 9352, s.Column_Number, s.Row_Num, 1
 FROM Seats s
 WHERE s.Plane_ID = 108
 ORDER BY s.Row_Num, s.Column_Number
 LIMIT 14;
 
--- ---------------------------------------------------------
--- D) Recalculate Final_Total for ALL orders (important after adding new orders)
--- ---------------------------------------------------------
-DROP TEMPORARY TABLE IF EXISTS tmp_order_totals;
-CREATE TEMPORARY TABLE tmp_order_totals AS
+-- Recalculate Final_Total after extra orders
+DROP TABLE IF EXISTS tmp_order_totals;
+CREATE TEMP TABLE tmp_order_totals AS
 SELECT
     o.Unique_Order_ID,
     ROUND(SUM(
@@ -1064,15 +979,13 @@ JOIN Seats s
  AND s.Column_Number = ss.Column_Number
 GROUP BY o.Unique_Order_ID;
 
-UPDATE Orders o
-LEFT JOIN tmp_order_totals t ON t.Unique_Order_ID = o.Unique_Order_ID
-SET o.Final_Total =
+UPDATE Orders
+SET Final_Total =
     CASE
-        WHEN o.Order_Status = 'systemcancellation' THEN 0.00
-        WHEN o.Order_Status = 'customercancellation' THEN ROUND(COALESCE(t.seats_total, 0.00) * 0.05, 2)
-        ELSE COALESCE(t.seats_total, 0.00)
-    END
-WHERE o.Unique_Order_ID > 0;
+        WHEN Order_Status = 'systemcancellation' THEN 0.00
+        WHEN Order_Status = 'customercancellation' THEN ROUND(COALESCE((SELECT seats_total FROM tmp_order_totals t WHERE t.Unique_Order_ID = Orders.Unique_Order_ID), 0.00) * 0.05, 2)
+        ELSE COALESCE((SELECT seats_total FROM tmp_order_totals t WHERE t.Unique_Order_ID = Orders.Unique_Order_ID), 0.00)
+    END;
 
 
 
