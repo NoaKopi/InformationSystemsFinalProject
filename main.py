@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 import sqlite3
+import os
 from decimal import Decimal
 from utils.utils import *
 
@@ -22,7 +23,7 @@ app.config.update(
 # DB CONNECTION + CONTEXT MANAGERS (SQLite)
 # ======================================================
 
-DB_PATH = "/Users/noakopilovich/Documents/python_ex_new/InformationSystem/InformationSystem_Project/FLYTAU15.sql"
+DB_PATH = os.path.join(app.instance_path, "FLYTAU15.db")
 
 
 class DictCursor:
@@ -52,9 +53,9 @@ class DictCursor:
 
 
 def get_db_connection():
+    os.makedirs(app.instance_path, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    # enforce FK constraints in SQLite (important!)
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
