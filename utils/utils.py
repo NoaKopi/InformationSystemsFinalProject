@@ -424,7 +424,7 @@ def get_route_duration_minutes(cursor, origin_id, dest_id):
         """
         SELECT Duration
         FROM Routes
-        WHERE Origin_Airport = %s AND Destination_Airport = %s
+        WHERE Origin_Airport = ? AND Destination_Airport = ?
         """,
         (origin_id, dest_id),
     )
@@ -434,7 +434,7 @@ def get_route_duration_minutes(cursor, origin_id, dest_id):
 
     dur = row["Duration"]
 
-    # MySQL TIME can come as timedelta, or string "HH:MM:SS"
+    # SQLite / MySQL TIME can come as timedelta or string "HH:MM:SS"
     if isinstance(dur, timedelta):
         return int(dur.total_seconds() // 60)
 
@@ -449,14 +449,18 @@ def get_route_duration_minutes(cursor, origin_id, dest_id):
     return None
 
 
+
 def is_long_flight(duration_minutes: int) -> bool:
-    # לפי הדרישה שלך נשאר כמו שהיה (אפשר לשנות אם יש כלל אחר)
     return int(duration_minutes) > 360
 
 
 def next_flight_id(cursor, base=1000) -> int:
-    cursor.execute("SELECT COALESCE(MAX(Flight_ID), %s) + 1 AS next_id FROM Flight", (base,))
-    return int(cursor.fetchone()["next_id"])
+    cursor.execute(
+        "SELECT COALESCE(MAX(Flight_ID), ?) + 1 AS next_id FROM Flight",
+        (base,),)
+    row = cursor.fetchone()
+    return int(row["next_id"] if isinstance(row, dict) else row[0])
+
 
 
 # -----------------------------
@@ -470,7 +474,7 @@ def plane_is_large(cursor, plane_id: int) -> bool:
         """
         SELECT 1
         FROM Seats
-        WHERE Plane_ID = %s
+        WHERE Plane_ID = ?
           AND LOWER(Class) = 'business'
         LIMIT 1
         """,
@@ -500,13 +504,12 @@ def available_planes(cursor, window_start_str: str, window_end_str: str, is_long
         SELECT p.Plane_ID, p.Plane_Size
         FROM Planes p
         WHERE
-          (%s = 0 OR EXISTS (
+          (? = 0 OR EXISTS (
               SELECT 1
               FROM Seats s
               WHERE s.Plane_ID = p.Plane_ID
                 AND LOWER(s.Class) = 'business'
-              LIMIT 1
-          ))
+              LIMIT 1))
           AND NOT EXISTS (
             SELECT 1
             FROM Flight f
@@ -515,19 +518,18 @@ def available_planes(cursor, window_start_str: str, window_end_str: str, is_long
              AND r.Destination_Airport = f.Destination_Airport
             WHERE f.Plane_ID = p.Plane_ID
               AND f.Flight_Status <> 'cancelled'
-              AND TIMESTAMP(%s) < ADDTIME(TIMESTAMP(f.Departure_Date, f.Departure_Time), r.Duration)
-              AND TIMESTAMP(f.Departure_Date, f.Departure_Time) < TIMESTAMP(%s)
+              AND datetime(?) < datetime(f.Departure_Date || ' ' || f.Departure_Time, '+' || CAST(strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00') AS INTEGER) || ' seconds')
+              AND datetime(f.Departure_Date || ' ' || f.Departure_Time) < datetime(?)
           )
         ORDER BY p.Plane_ID
         """,
         (1 if is_long else 0, window_start_str, window_end_str),
     )
     rows = cursor.fetchall() or []
-    # add computed label for UI
     for r in rows:
-        # safe even if Plane_Size is numeric
         r["SizeLabel"] = "large" if _plane_has_business_from_cached(cursor, r["Plane_ID"]) else "small"
     return rows
+
 
 
 def _plane_has_business_from_cached(cursor, plane_id):
@@ -536,12 +538,11 @@ def _plane_has_business_from_cached(cursor, plane_id):
         """
         SELECT 1
         FROM Seats
-        WHERE Plane_ID = %s
+        WHERE Plane_ID = ?
           AND LOWER(Class) = 'business'
         LIMIT 1
         """,
-        (plane_id,),
-    )
+        (plane_id,),)
     return cursor.fetchone() is not None
 
 
@@ -550,7 +551,7 @@ def available_pilots(cursor, window_start_str: str, window_end_str: str, require
         """
         SELECT p.Worker_ID, p.Is_Qualified
         FROM Pilots p
-        WHERE (%s = 0 OR p.Is_Qualified = 1)
+        WHERE (? = 0 OR p.Is_Qualified = 1)
           AND NOT EXISTS (
             SELECT 1
             FROM Pilots_Scheduled_to_Flights ps
@@ -560,8 +561,8 @@ def available_pilots(cursor, window_start_str: str, window_end_str: str, require
              AND r.Destination_Airport = f.Destination_Airport
             WHERE ps.Worker_ID = p.Worker_ID
               AND f.Flight_Status <> 'cancelled'
-              AND TIMESTAMP(%s) < ADDTIME(TIMESTAMP(f.Departure_Date, f.Departure_Time), r.Duration)
-              AND TIMESTAMP(f.Departure_Date, f.Departure_Time) < TIMESTAMP(%s)
+              AND datetime(?) < datetime(f.Departure_Date || ' ' || f.Departure_Time, '+' || CAST(strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00') AS INTEGER) || ' seconds')
+              AND datetime(f.Departure_Date || ' ' || f.Departure_Time) < datetime(?)
           )
         ORDER BY p.Worker_ID
         """,
@@ -570,12 +571,13 @@ def available_pilots(cursor, window_start_str: str, window_end_str: str, require
     return cursor.fetchall() or []
 
 
+
 def available_attendants(cursor, window_start_str: str, window_end_str: str, require_long_qualified: bool):
     cursor.execute(
         """
         SELECT a.Worker_ID, a.Is_Qualified
         FROM Flight_Attendants a
-        WHERE (%s = 0 OR a.Is_Qualified = 1)
+        WHERE (? = 0 OR a.Is_Qualified = 1)
           AND NOT EXISTS (
             SELECT 1
             FROM Flight_Attendants_Assigned_To_Flights fa
@@ -585,14 +587,15 @@ def available_attendants(cursor, window_start_str: str, window_end_str: str, req
              AND r.Destination_Airport = f.Destination_Airport
             WHERE fa.Worker_ID = a.Worker_ID
               AND f.Flight_Status <> 'cancelled'
-              AND TIMESTAMP(%s) < ADDTIME(TIMESTAMP(f.Departure_Date, f.Departure_Time), r.Duration)
-              AND TIMESTAMP(f.Departure_Date, f.Departure_Time) < TIMESTAMP(%s)
+              AND datetime(?) < datetime(f.Departure_Date || ' ' || f.Departure_Time, '+' || CAST(strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00') AS INTEGER) || ' seconds')
+              AND datetime(f.Departure_Date || ' ' || f.Departure_Time) < datetime(?)
           )
         ORDER BY a.Worker_ID
         """,
         (1 if require_long_qualified else 0, window_start_str, window_end_str),
     )
     return cursor.fetchall() or []
+
 
 def parse_dt_flexible(value):
     """
@@ -635,11 +638,11 @@ def overlap_exists_for_plane(cursor, plane_id, window_start, window_end) -> bool
         JOIN Routes r
           ON r.Origin_Airport = f.Origin_Airport
          AND r.Destination_Airport = f.Destination_Airport
-        WHERE f.Plane_ID = %s
-          AND f.Flight_Status IN ('active','full','done')  -- אם אצלך אחרת תשאירי כמו שהיה
+        WHERE f.Plane_ID = ?
+          AND f.Flight_Status IN ('active','full','done')
           AND (
-                TIMESTAMP(f.Departure_Date, f.Departure_Time) < %s
-            AND TIMESTAMP(f.Departure_Date, f.Departure_Time) + INTERVAL TIME_TO_SEC(r.Duration) SECOND > %s
+                datetime(f.Departure_Date || ' ' || f.Departure_Time) < ?
+            AND datetime(f.Departure_Date || ' ' || f.Departure_Time, '+' || CAST(strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00') AS INTEGER) || ' seconds') > ?
           )
         LIMIT 1
     """, (int(plane_id), end_dt, start_dt))
@@ -659,17 +662,16 @@ def overlap_exists_for_pilot(cursor, worker_id, window_start, window_end) -> boo
         JOIN Routes r
           ON r.Origin_Airport = f.Origin_Airport
          AND r.Destination_Airport = f.Destination_Airport
-        WHERE psf.Worker_ID = %s
+        WHERE psf.Worker_ID = ?
           AND f.Flight_Status IN ('active','full','done')
           AND (
-                TIMESTAMP(f.Departure_Date, f.Departure_Time) < %s
-            AND TIMESTAMP(f.Departure_Date, f.Departure_Time) + INTERVAL TIME_TO_SEC(r.Duration) SECOND > %s
+                datetime(f.Departure_Date || ' ' || f.Departure_Time) < ?
+            AND datetime(f.Departure_Date || ' ' || f.Departure_Time, '+' || CAST(strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00') AS INTEGER) || ' seconds') > ?
           )
         LIMIT 1
     """, (int(worker_id), end_dt, start_dt))
 
     return cursor.fetchone() is not None
-
 
 
 def overlap_exists_for_attendant(cursor, worker_id, window_start, window_end) -> bool:
@@ -683,11 +685,11 @@ def overlap_exists_for_attendant(cursor, worker_id, window_start, window_end) ->
         JOIN Routes r
           ON r.Origin_Airport = f.Origin_Airport
          AND r.Destination_Airport = f.Destination_Airport
-        WHERE fa.Worker_ID = %s
+        WHERE fa.Worker_ID = ?
           AND f.Flight_Status IN ('active','full','done')
           AND (
-                TIMESTAMP(f.Departure_Date, f.Departure_Time) < %s
-            AND TIMESTAMP(f.Departure_Date, f.Departure_Time) + INTERVAL TIME_TO_SEC(r.Duration) SECOND > %s
+                datetime(f.Departure_Date || ' ' || f.Departure_Time) < ?
+            AND datetime(f.Departure_Date || ' ' || f.Departure_Time, '+' || CAST(strftime('%s','1970-01-01 ' || r.Duration) - strftime('%s','1970-01-01 00:00:00') AS INTEGER) || ' seconds') > ?
           )
         LIMIT 1
     """, (int(worker_id), end_dt, start_dt))

@@ -493,10 +493,9 @@ def register():
 # =============================
 # GUEST SEARCH
 # =============================
-@app.route('/guest/search')
+@app.route("/guest/search")
 def guest_search():
-    return render_template('guest_search.html')
-
+    return redirect(url_for("home_page"))
 
 # =============================
 # AVAILABLE FLIGHTS
