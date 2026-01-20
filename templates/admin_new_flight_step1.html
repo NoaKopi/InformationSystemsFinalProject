@@ -6,7 +6,7 @@
   <p class="subtitle">Step 1: Choose route and departure date/time</p>
 
   <div class="search-card">
-    <form class="search-grid" method="POST" action="{{ url_for('admin_new_flight_step1') }}">
+    <form class="search-grid" method="POST" action="{{ url_for('admin_new_flight_step1') }}" novalidate>
 
       <div class="field">
         <label>Origin</label>
@@ -30,7 +30,7 @@
 
       <div class="field">
         <label>Departure date</label>
-        <input type="date" name="departure_date" required>
+        <input type="date" id="departure_date" name="departure_date" required min="{{ today_min }}">
       </div>
 
       <div class="field">

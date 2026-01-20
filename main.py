@@ -507,6 +507,29 @@ def available_flights():
     start_date = (request.args.get("start_date") or "").strip()
     end_date = (request.args.get("end_date") or "").strip()
 
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+            today_dt = date.today()
+
+            if start_dt < today_dt:
+                flash(
+                    "You can't search flights for a past departure date. Please choose today or a future date.",
+                    "error"
+                )
+                return redirect(url_for(
+                    "home_page",
+                    origin_id=origin_id,
+                    destination_id=destination_id,
+                    start_date=start_date))
+        except ValueError:
+            flash("Invalid departure date format.", "error")
+            return redirect(url_for(
+                "home_page",
+                origin_id=origin_id,
+                destination_id=destination_id,
+                start_date=start_date))
+
     if not origin_id and not destination_id and not start_date and not end_date:
         flash("Please search first.", "error")
         return redirect(url_for("home_page"))
@@ -1828,6 +1851,8 @@ def admin_new_flight_step1():
     if not admin_required_or_redirect():
         return redirect(url_for("login"))
 
+    today_min = datetime.now().strftime("%Y-%m-%d")
+
     airports = []
 
     try:
@@ -1847,18 +1872,22 @@ def admin_new_flight_step1():
 
                 if not all([origin_id, dest_id, dep_date, dep_time]):
                     flash("All fields are required.", "error")
-                    return render_template("admin_new_flight_step1.html", airports=airports)
+                    return render_template("admin_new_flight_step1.html", airports=airports, today_min=today_min)
 
                 if origin_id == dest_id:
                     flash("Origin and destination must be different.", "error")
-                    return render_template("admin_new_flight_step1.html", airports=airports)
+                    return render_template("admin_new_flight_step1.html", airports=airports, today_min=today_min)
 
                 duration = get_route_duration_minutes(cursor, origin_id, dest_id)
                 if duration is None:
                     flash("Route duration not found for this origin/destination.", "error")
-                    return render_template("admin_new_flight_step1.html", airports=airports)
+                    return render_template("admin_new_flight_step1.html", airports=airports, today_min=today_min)
 
                 dep_dt = dt_from_date_time(dep_date, dep_time)
+                if dep_dt < datetime.now():
+                    flash("Departure date must be in the future.", "error")
+                    return render_template("admin_new_flight_step1.html", airports=airports, today_min=today_min)
+
                 end_dt = dep_dt + timedelta(minutes=int(duration))
 
                 session["admin_new_flight"] = {
@@ -1873,7 +1902,7 @@ def admin_new_flight_step1():
                 }
                 return redirect(url_for("admin_new_flight_step2"))
 
-        return render_template("admin_new_flight_step1.html", airports=airports)
+        return render_template("admin_new_flight_step1.html", airports=airports , today_min=today_min)
 
     except Exception as e:
         flash(f"Database error: {e}", "error")
