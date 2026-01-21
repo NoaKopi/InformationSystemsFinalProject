@@ -537,6 +537,7 @@ def available_flights():
     airports, flights = [], []
     try:
         with db_cursor() as (_, cursor):
+            update_flight_statuses_done_if_past(cursor)
             cursor.execute("""
                 SELECT Airport_ID, Airport_Name, City, Country
                 FROM Airports
@@ -578,7 +579,17 @@ def available_flights():
             params = []
 
             if not is_admin_user():
-                sql += " AND f.Flight_Status = 'active'"
+                sql += """
+                    AND f.Flight_Status = 'active'
+                    AND (
+                        f.Departure_Date > DATE('now')
+                        OR (
+                            f.Departure_Date = DATE('now')
+                            AND f.Departure_Time > TIME('now')
+                        )
+                    )
+                """
+
 
             if origin_id:
                 sql += " AND f.Origin_Airport = ?"
@@ -778,10 +789,11 @@ def draft_select_seats():
                   AND ss.Is_Occupied = 1
                   AND o.Order_Status = 'active'
             """, (flight_id, plane_id))
-            occ_rows = cursor.fetchall()
+            occ_rows = cursor.fetchall() or []
             occupied = {f"{r['Row_Num']}{r['Column_Number']}" for r in occ_rows}
 
         selected_prev = set(session.get("draft_selected_seats", []))
+
 
         if request.method == "POST":
             selected = request.form.getlist("seat_choice")
@@ -793,61 +805,53 @@ def draft_select_seats():
                     seats=seats,
                     occupied=occupied,
                     selected=selected_prev,
-                    needed=needed)
+                    needed=needed
+                )
+
+            if len(set(selected)) != len(selected):
+                flash("Duplicate seat selection detected. Please select unique seats.", "error")
+                return redirect(url_for("draft_select_seats"))
 
             parsed = []
             for seat_id in selected:
-                row_part = seat_id[:-1]
-                col_part = seat_id[-1]
-                try:
-                    row_num = int(row_part)
-                except Exception:
+                seat_id = (seat_id or "").strip()
+                if len(seat_id) < 2:
                     flash("Invalid seat selection.", "error")
                     return redirect(url_for("draft_select_seats"))
+
+                row_part = seat_id[:-1]
+                col_part = seat_id[-1].upper()
+
+                if not row_part.isdigit() or not col_part.isalpha():
+                    flash("Invalid seat selection.", "error")
+                    return redirect(url_for("draft_select_seats"))
+
+                row_num = int(row_part)
                 parsed.append((row_num, col_part))
 
-            # ---------------------------------------------------------
-            # SQLite note:
-            # SQLite does NOT support (Row_Num, Column_Number) IN ((?,?),(?,?)) reliably.
-            # Minimal safe approach:
-            # 1) fetch candidate seats by row/col sets
-            # 2) validate exact set in Python + validate class
-            # ---------------------------------------------------------
-            rows_list = [r for (r, _) in parsed]
-            cols_list = [c for (_, c) in parsed]
-
-            if not rows_list or not cols_list:
-                flash("Invalid seat selection.", "error")
+            if any(s in occupied for s in selected):
+                flash("One or more seats are no longer available. Please choose again.", "error")
                 return redirect(url_for("draft_select_seats"))
 
-            row_ph = ",".join(["?"] * len(rows_list))
-            col_ph = ",".join(["?"] * len(cols_list))
+            where_pairs = " OR ".join(["(Row_Num = ? AND Column_Number = ?)"] * len(parsed))
+            pair_params = []
+            for (r, c) in parsed:
+                pair_params.extend([int(r), str(c)])
 
             with db_cursor() as (_, cursor):
                 cursor.execute(f"""
                     SELECT Row_Num, Column_Number, Class
                     FROM Seats
                     WHERE Plane_ID = ?
-                      AND Row_Num IN ({row_ph})
-                      AND Column_Number IN ({col_ph})
-                """, (plane_id, *rows_list, *cols_list))
+                      AND Class = ?
+                      AND ({where_pairs})
+                """, (plane_id, ticket_class, *pair_params))
                 rows = cursor.fetchall() or []
 
-            # Validate exact seats exist
             db_set = {(int(r["Row_Num"]), str(r["Column_Number"])) for r in rows}
             wanted_set = {(int(r), str(c)) for (r, c) in parsed}
             if db_set != wanted_set:
                 flash("One or more selected seats are invalid.", "error")
-                return redirect(url_for("draft_select_seats"))
-
-            # Validate class
-            if any(r["Class"] != ticket_class for r in rows):
-                flash(f"You can only select {ticket_class} seats for this ticket type.", "error")
-                return redirect(url_for("draft_select_seats"))
-
-            # Validate availability
-            if any(s in occupied for s in selected):
-                flash("One or more seats are no longer available. Please choose again.", "error")
                 return redirect(url_for("draft_select_seats"))
 
             session["draft_selected_seats"] = selected
@@ -858,12 +862,12 @@ def draft_select_seats():
             seats=seats,
             occupied=occupied,
             selected=selected_prev,
-            needed=needed)
+            needed=needed
+        )
 
     except Exception as e:
         flash(f"Database error while loading seats: {e}", "error")
         return redirect(url_for("home_page"))
-
 
 # =============================
 # DRAFT: REVIEW
@@ -1774,6 +1778,15 @@ def admin_flights():
     airports, flights = [], []
 
     try:
+        # 1) ROOT FIX: update past flights to 'done' WITH COMMIT
+        try:
+            with db_transaction() as (_, tcur):
+                update_flight_statuses_done_if_past(tcur)
+        except Exception as e:
+            # don't break the admin page if auto-update fails
+            print("Flight status auto-update failed (admin_flights):", e)
+
+        # 2) read data normally
         with db_cursor() as (_, cursor):
             cursor.execute("""
                 SELECT Airport_ID, Airport_Name, City, Country
@@ -1840,8 +1853,7 @@ def admin_flights():
         destination_id=destination_id,
         start_date=start_date,
         end_date=end_date,
-        status=status
-    )
+        status=status)
 
 # ======================================================
 # Admin - Add Flight
@@ -2169,7 +2181,7 @@ def admin_cancel_flight_confirm(flight_id):
             return redirect(url_for("admin_cancel_flight_pick"))
 
         if not can_cancel_flight_by_72h_rule(flight["Departure_Date"], flight["Departure_Time"]):
-            flash("Cancellation is not allowed פחות מ-72 שעות לפני הטיסה.", "error")
+            flash("Cancellation is not allowed less than 72 hours before the flight.", "error")
             return redirect(url_for("admin_cancel_flight_pick"))
 
         if request.method == "GET":

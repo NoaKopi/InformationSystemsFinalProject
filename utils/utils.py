@@ -7,6 +7,35 @@ from abc import ABC, abstractmethod
 FLIGHT_STATUSES = {"active", "cancelled", "done", "full"}
 ORDER_STATUSES = {"active", "done", "systemcancellation", "customercancellation"}
 
+def update_flight_statuses_done_if_past(cursor) -> int:
+    """
+    Mark flights as 'done' if their departure datetime has passed.
+    Updates only flights currently in ('active','full').
+    Does not touch 'cancelled' or already 'done'.
+
+    Works with DictCursor wrappers that may not have .rowcount.
+    Returns number of updated rows when available, otherwise returns 0.
+    """
+    cursor.execute("""
+        UPDATE Flight
+        SET Flight_Status = 'done'
+        WHERE Flight_Status IN ('active', 'full')
+          AND (
+                Departure_Date < DATE('now')
+                OR (
+                    Departure_Date = DATE('now')
+                    AND Departure_Time <= TIME('now')
+                )
+          )
+    """)
+
+    # Some cursor wrappers (like DictCursor) don't expose rowcount.
+    try:
+        return int(getattr(cursor, "rowcount"))
+    except Exception:
+        return 0
+
+
 
 # =============================
 # Users
