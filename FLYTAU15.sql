@@ -1087,7 +1087,7 @@ GROUP BY
 ORDER BY
     w.Worker_ID,
     w.Employee_Type;
-    
+
     -- שאילתה 4
 SELECT
     DATE_FORMAT(Date_Of_Order, '%m-%Y') AS month_year,
@@ -1103,40 +1103,60 @@ ORDER BY MIN(Date_Of_Order);
 -- שאילתה 5
 SELECT
     p.Plane_ID,
+    m.month_year,
+    m.flights_performed,
+    m.flights_cancelled,
+    ROUND(100.0 * m.active_days_done / 30, 2) AS utilization_percent,
 
-    -- טווח חודשים שבו למטוס יש טיסות (במקום month_year יחיד)
-    CONCAT(
-        DATE_FORMAT(MIN(f.Departure_Date), '%m-%Y'),
-        ' - ',
-        DATE_FORMAT(MAX(f.Departure_Date), '%m-%Y')
-    ) AS period_months,
-
-    SUM(f.Flight_Status = 'done')      AS flights_performed,
-    SUM(f.Flight_Status = 'cancelled') AS flights_cancelled,
-
-    -- ניצולת: מספר טיסות DONE חלקי (30 ימים * מספר החודשים שבהם היו למטוס טיסות)
-    ROUND(
-        100.0 * SUM(f.Flight_Status = 'done')
-        / NULLIF(30 * COUNT(DISTINCT DATE_FORMAT(f.Departure_Date, '%Y-%m')), 0),
-        2
-    ) AS utilization_percent,
-
-    -- זוג מקור-יעד שולט לכל התקופה (בשמות שדות תעופה)
     (
-        SELECT CONCAT(ao.Airport_Name, ' -> ', ad.Airport_Name)
+        SELECT
+            ao.Airport_Name || ' -> ' || ad.Airport_Name
         FROM Flight f2
         JOIN Airports ao ON ao.Airport_ID = f2.Origin_Airport
         JOIN Airports ad ON ad.Airport_ID = f2.Destination_Airport
         WHERE f2.Plane_ID = p.Plane_ID
-        GROUP BY f2.Origin_Airport, f2.Destination_Airport, ao.Airport_Name, ad.Airport_Name
-        ORDER BY COUNT(*) DESC, f2.Origin_Airport, f2.Destination_Airport
-        LIMIT 1
-    ) AS dominant_origin_destination
+          AND strftime('%Y-%m', f2.Departure_Date) = m.month_year
+          AND f2.Flight_Status = 'done'
+        GROUP BY
+            f2.Origin_Airport,
+            f2.Destination_Airport,
+            ao.Airport_Name,
+            ad.Airport_Name
+        ORDER BY
+            COUNT(*) DESC,
+            f2.Origin_Airport,
+            f2.Destination_Airport
+        LIMIT 1)
+     AS dominant_origin_destination
 
 FROM Planes p
-LEFT JOIN Flight f
-  ON f.Plane_ID = p.Plane_ID
-GROUP BY p.Plane_ID
-ORDER BY p.Plane_ID;
+JOIN (
+    SELECT
+        Plane_ID,
+        strftime('%Y-%m', Departure_Date) AS month_year,
 
+        SUM(CASE
+            WHEN Flight_Status = 'done' THEN 1
+            ELSE 0
+        END) AS flights_performed,
 
+        SUM(CASE
+            WHEN Flight_Status = 'cancelled' THEN 1
+            ELSE 0
+        END) AS flights_cancelled,
+
+        COUNT(DISTINCT CASE
+            WHEN Flight_Status = 'done' THEN Departure_Date
+            ELSE NULL
+        END) AS active_days_done
+
+    FROM Flight
+    GROUP BY
+        Plane_ID,
+        strftime('%Y-%m', Departure_Date))
+ AS m
+ON m.Plane_ID = p.Plane_ID
+
+ORDER BY
+    p.Plane_ID,
+    m.month_year;
