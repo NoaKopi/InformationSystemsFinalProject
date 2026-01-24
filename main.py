@@ -12,8 +12,7 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=10),  # disconnects after 10 minutes of inactivity
     SESSION_FILE_DIR= "/home/NoaKopi/InformationSystemsFinalProject/flask_session_data",
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax",
-)
+    SESSION_COOKIE_SAMESITE="Lax",)
 
 # ======================================================
 # MAIN
@@ -176,8 +175,7 @@ def plane_has_business(cursor, plane_id: int) -> bool:
           AND LOWER(Class) = 'business'
         LIMIT 1
         """,
-        (int(plane_id),),
-    )
+        (int(plane_id),),)
     return cursor.fetchone() is not None
 
 
@@ -199,8 +197,7 @@ def fetch_flight_prices(flight_id: int):
             return {"Economy": 0.0, "Business": 0.0}
         return {
             "Economy": float(row["Economy_Price"]),
-            "Business": float(row["Business_Price"]),
-        }
+            "Business": float(row["Business_Price"]),}
 
 
 def infer_order_ticket_class(unique_order_id: int):
@@ -265,8 +262,7 @@ def db_check():
                 FROM sqlite_master
                 WHERE type='table'
                   AND name NOT LIKE 'sqlite_%'
-                ORDER BY name;
-            """)
+                ORDER BY name;""")
             tables = [row["name"] for row in cursor.fetchall()]
 
             cursor.execute("SELECT COUNT(*) AS cnt FROM Airports;")
@@ -295,8 +291,7 @@ def home_page():
             cursor.execute("""
                 SELECT Airport_ID, Airport_Name, City, Country
                 FROM Airports
-                ORDER BY Country, City, Airport_Name
-            """)
+                ORDER BY Country, City, Airport_Name """)
             airports = cursor.fetchall()
     except Exception as e:
         flash(f"Database error loading airports: {e}", "error")
@@ -308,8 +303,7 @@ def home_page():
         selected_destination=selected_destination,
         start_date=start_date,
         end_date=end_date,
-        today=today
-    )
+        today=today)
 
 
 # =============================
@@ -411,8 +405,7 @@ def client_home():
         "client_home.html",
         first_name=session.get("First_Name_In_English", ""),
         last_name=session.get("Last_Name_In_English", ""),
-        email=session.get("Email_Address", "")
-    )
+        email=session.get("Email_Address", ""))
 
 
 @app.route("/logout")
@@ -513,10 +506,7 @@ def available_flights():
             today_dt = date.today()
 
             if start_dt < today_dt:
-                flash(
-                    "You can't search flights for a past departure date. Please choose today or a future date.",
-                    "error"
-                )
+                flash("You can't search flights for a past departure date. Please choose today or a future date.","error")
                 return redirect(url_for(
                     "home_page",
                     origin_id=origin_id,
@@ -585,11 +575,7 @@ def available_flights():
                         f.Departure_Date > DATE('now')
                         OR (
                             f.Departure_Date = DATE('now')
-                            AND f.Departure_Time > TIME('now')
-                        )
-                    )
-                """
-
+                            AND f.Departure_Time > TIME('now'))) """
 
             if origin_id:
                 sql += " AND f.Origin_Airport = ?"
@@ -627,8 +613,7 @@ def available_flights():
         origin_id=origin_id,
         destination_id=destination_id,
         start_date=start_date,
-        end_date=end_date
-    )
+        end_date=end_date)
 
 
 # =============================
@@ -675,7 +660,6 @@ def book_flight(flight_id):
         if selected_class not in ("Economy", "Business"):
             selected_class = "Economy"
 
-        # if no business in plane -> force Economy
         if selected_class == "Business" and not has_business:
             flash("Business class is not available for this flight. Switched to Economy.", "error")
             selected_class = "Economy"
@@ -714,8 +698,7 @@ def book_flight(flight_id):
             "quantity": int(quantity),
             "ticket_class": selected_class,
             "unit_price": unit_price,
-            "created_at": datetime.now().isoformat()
-        }
+            "created_at": datetime.now().isoformat() }
 
         if is_registered_user():
             draft["user_type"] = "registered_client"
@@ -805,8 +788,7 @@ def draft_select_seats():
                     seats=seats,
                     occupied=occupied,
                     selected=selected_prev,
-                    needed=needed
-                )
+                    needed=needed)
 
             if len(set(selected)) != len(selected):
                 flash("Duplicate seat selection detected. Please select unique seats.", "error")
@@ -862,15 +844,14 @@ def draft_select_seats():
             seats=seats,
             occupied=occupied,
             selected=selected_prev,
-            needed=needed
-        )
+            needed=needed )
 
     except Exception as e:
         flash(f"Database error while loading seats: {e}", "error")
         return redirect(url_for("home_page"))
 
 # =============================
-# DRAFT: REVIEW
+# DRAFT: REVIEW ORDER
 # =============================
 @app.route("/draft/review", methods=["GET"])
 def order_review():
@@ -933,7 +914,7 @@ def order_review():
 
 
 # =============================
-# DRAFT: CONFIRM
+# DRAFT: CONFIRM ORDER
 # =============================
 @app.route("/draft/confirm", methods=["POST"])
 def confirm_order():
@@ -1167,8 +1148,7 @@ def fetch_order_details(unique_order_id: int, user_is_reg: bool, email: str):
                 "departure_date": f["Departure_Date"],
                 "departure_time": f["Departure_Time"],
                 "quantity_of_tickets": qty,
-                "seats": seats
-            }
+                "seats": seats}
     except Exception:
         return None
 
@@ -1326,7 +1306,6 @@ def order_management():
     user_is_reg = bool(is_registered_user())
     future_orders, past_orders = [], []
 
-    # bring orders
     if tab == "future":
         if user_is_reg:
             email = session.get("Email_Address")
@@ -1403,8 +1382,7 @@ def order_management():
         active_tab=tab,
         user_is_registered=user_is_reg,
         future_orders=future_orders,
-        past_orders=past_orders
-    )
+        past_orders=past_orders)
 
 # =============================
 # ORDER LOOKUP (GUEST)
@@ -1527,10 +1505,7 @@ def cancel_order():
                 WHERE Unique_Order_ID = ?
             """, (unique_order_id,))
 
-        flash(
-            f"Order {unique_order_id} cancelled. Cancellation fee charged: ${fee_total:.2f}",
-            "success"
-        )
+        flash(f"Order {unique_order_id} cancelled. Cancellation fee charged: ${fee_total:.2f}", "success")
         return redirect(url_for("order_management", tab="future"))
 
     except Exception as e:
@@ -1643,7 +1618,6 @@ def admin_reports():
             revenue_rows = cursor.fetchall() or []
 
             # Workers accumulated flight hours (short vs long)
-            # SQLite: TIME_TO_SEC replacement via strftime seconds delta
             cursor.execute("""
                 SELECT
                     w.Worker_ID,
@@ -1740,8 +1714,7 @@ def admin_reports():
                 ORDER BY
                     f.Plane_ID,
                     strftime('%Y', f.Departure_Date),
-                    strftime('%m', f.Departure_Date);
-            """)
+                    strftime('%m', f.Departure_Date); """)
             plane_month_rows = cursor.fetchall() or []
 
         return render_template(
@@ -1750,8 +1723,7 @@ def admin_reports():
             revenue_rows=revenue_rows,
             worker_hours_rows=worker_hours_rows,
             cancel_rate_rows=cancel_rate_rows,
-            plane_month_rows=plane_month_rows
-        )
+            plane_month_rows=plane_month_rows)
 
     except Exception as e:
         flash(f"Database error loading reports: {e}", "error")
@@ -1778,21 +1750,17 @@ def admin_flights():
     airports, flights = [], []
 
     try:
-        # 1) ROOT FIX: update past flights to 'done' WITH COMMIT
         try:
             with db_transaction() as (_, tcur):
                 update_flight_statuses_done_if_past(tcur)
         except Exception as e:
-            # don't break the admin page if auto-update fails
             print("Flight status auto-update failed (admin_flights):", e)
 
-        # 2) read data normally
         with db_cursor() as (_, cursor):
             cursor.execute("""
                 SELECT Airport_ID, Airport_Name, City, Country
                 FROM Airports
-                ORDER BY Country, City, Airport_Name
-            """)
+                ORDER BY Country, City, Airport_Name """)
             airports = cursor.fetchall()
 
             sql = """
@@ -1872,8 +1840,7 @@ def admin_new_flight_step1():
             cursor.execute("""
                 SELECT Airport_ID, Airport_Name, City, Country
                 FROM Airports
-                ORDER BY Country, City, Airport_Name
-            """)
+                ORDER BY Country, City, Airport_Name """)
             airports = cursor.fetchall()
 
             if request.method == "POST":
@@ -1910,8 +1877,7 @@ def admin_new_flight_step1():
                     "duration": int(duration),
                     "is_long": is_long_flight(int(duration)),
                     "window_start": dep_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                    "window_end": end_dt.strftime("%Y-%m-%d %H:%M:%S")
-                }
+                    "window_end": end_dt.strftime("%Y-%m-%d %H:%M:%S") }
                 return redirect(url_for("admin_new_flight_step2"))
 
         return render_template("admin_new_flight_step1.html", airports=airports , today_min=today_min)
@@ -1955,10 +1921,8 @@ def admin_new_flight_step2():
                     flash("Plane and economy price are required.", "error")
                     return render_template(
                         "admin_new_flight_step2.html",
-                        draft=draft, planes=planes, pilots=pilots, attendants=attendants
-                    )
+                        draft=draft, planes=planes, pilots=pilots, attendants=attendants )
 
-                # validate plane exists  (SQLite: ?)
                 cursor.execute("SELECT Plane_ID FROM Planes WHERE Plane_ID = ?", (plane_id,))
                 if not cursor.fetchone():
                     flash("Selected plane not found.", "error")
@@ -1979,15 +1943,13 @@ def admin_new_flight_step2():
                     flash(f"Please select exactly {req_pilots} pilots.", "error")
                     return render_template(
                         "admin_new_flight_step2.html",
-                        draft=draft, planes=planes, pilots=pilots, attendants=attendants
-                    )
+                        draft=draft, planes=planes, pilots=pilots, attendants=attendants)
 
                 if len(selected_att) != req_att:
                     flash(f"Please select exactly {req_att} attendants.", "error")
                     return render_template(
                         "admin_new_flight_step2.html",
-                        draft=draft, planes=planes, pilots=pilots, attendants=attendants
-                    )
+                        draft=draft, planes=planes, pilots=pilots, attendants=attendants)
 
                 bp = None
                 if is_plane_large:
@@ -1995,11 +1957,9 @@ def admin_new_flight_step2():
                         flash("Business price is required for LARGE planes (Business class exists).", "error")
                         return render_template(
                             "admin_new_flight_step2.html",
-                            draft=draft, planes=planes, pilots=pilots, attendants=attendants
-                        )
+                            draft=draft, planes=planes, pilots=pilots, attendants=attendants)
                     bp = float(business_price)
 
-                # HARD re-check availability now (no SQL changes needed here, only placeholders inside utils if any)
                 current_planes = available_planes(cursor, window_start, window_end, is_long=is_long)
                 current_plane_ids = {int(p["Plane_ID"]) for p in current_planes}
                 if plane_id_int not in current_plane_ids:
@@ -2022,15 +1982,13 @@ def admin_new_flight_step2():
                     "economy_price": float(economy_price),
                     "business_price": bp,
                     "selected_pilots": [str(x) for x in selected_pilots],
-                    "selected_attendants": [str(x) for x in selected_att],
-                })
+                    "selected_attendants": [str(x) for x in selected_att],})
                 session["admin_new_flight"] = draft
                 return redirect(url_for("admin_new_flight_review"))
 
         return render_template(
             "admin_new_flight_step2.html",
-            draft=draft, planes=planes, pilots=pilots, attendants=attendants
-        )
+            draft=draft, planes=planes, pilots=pilots, attendants=attendants)
 
     except Exception as e:
         flash(f"Database error: {e}", "error")
@@ -2051,21 +2009,17 @@ def admin_new_flight_review():
         return redirect(url_for("admin_new_flight_step1"))
 
     try:
-        # Keep the original datetimes for our own use if needed
         new_start = datetime.strptime(draft["window_start"], "%Y-%m-%d %H:%M:%S")
         new_end = datetime.strptime(draft["window_end"], "%Y-%m-%d %H:%M:%S")
 
-        # pass WITHOUT seconds to overlap_* helpers
         window_start_nosec = draft["window_start"][:16]  # 'YYYY-MM-DD HH:MM'
         window_end_nosec = draft["window_end"][:16]      # 'YYYY-MM-DD HH:MM'
 
         if request.method == "GET":
             return render_template("admin_new_flight_review.html", draft=draft)
 
-        # Normalize time for TIME column
         dep_time_sql = normalize_time_to_hhmmss(draft.get("dep_time"))
 
-        # writes -> transaction
         with db_transaction() as (_, cursor):
 
             if overlap_exists_for_plane(cursor, int(draft["plane_id"]), window_start_nosec, window_end_nosec):
@@ -2088,24 +2042,21 @@ def admin_new_flight_review():
             if business_price is None:
                 business_price = 0.00
 
-            # SQLite: ? placeholders
             cursor.execute("""
                 INSERT INTO Flight
                   (Flight_ID, Plane_ID, Origin_Airport, Destination_Airport,
                    Departure_Time, Departure_Date,
                    Economy_Price, Business_Price, Flight_Status)
                 VALUES
-                  (?,?,?,?,?,?,?,?, 'active')
-            """, (
-                int(flight_id),
+                  (?,?,?,?,?,?,?,?, 'active') """,
+                (int(flight_id),
                 int(draft["plane_id"]),
                 int(draft["origin_id"]),
                 int(draft["dest_id"]),
                 dep_time_sql,          # always HH:MM:SS
                 draft["dep_date"],
                 float(draft["economy_price"]),
-                float(business_price)
-            ))
+                float(business_price)))
 
             for wid in draft["selected_pilots"]:
                 cursor.execute("""
@@ -2180,14 +2131,18 @@ def admin_cancel_flight_confirm(flight_id):
             flash("Flight not found.", "error")
             return redirect(url_for("admin_cancel_flight_pick"))
 
+        if flight["Flight_Status"] not in ("active", "full"):
+            flash("This flight has already occurred or was cancelled and cannot be cancelled.", "error")
+            return redirect(url_for("admin_flights"))
+
         if not can_cancel_flight_by_72h_rule(flight["Departure_Date"], flight["Departure_Time"]):
             flash("Cancellation is not allowed less than 72 hours before the flight.", "error")
-            return redirect(url_for("admin_cancel_flight_pick"))
+            return redirect(url_for("admin_flights"))
+
 
         if request.method == "GET":
             return render_template("admin_cancel_confirm.html", flight=flight)
 
-        # POST -> transaction
         with db_transaction() as (_, cursor):
             # SQLite: no FOR UPDATE
             cursor.execute("""
@@ -2215,7 +2170,6 @@ def admin_cancel_flight_confirm(flight_id):
                 WHERE Flight_ID = ?
             """, (flight_id,))
 
-            # SQLite: no FOR UPDATE
             cursor.execute("""
                 SELECT Unique_Order_ID
                 FROM Orders
@@ -2286,7 +2240,6 @@ def admin_add_staff():
 
     try:
         with db_transaction() as (_, cursor):
-            # SQLite: ? placeholders
             cursor.execute("SELECT 1 FROM Pilots WHERE Worker_ID = ? LIMIT 1", (worker_id,))
             if cursor.fetchone():
                 flash("Worker ID already exists as Pilot.", "error")
@@ -2311,8 +2264,7 @@ def admin_add_staff():
                     VALUES (?,?,?,?,?,?,?,?,?)
                 """, (
                     worker_id, city, street, house_number,
-                    first_he, last_he, phone, start_date, is_qualified
-                ))
+                    first_he, last_he, phone, start_date, is_qualified))
             else:
                 cursor.execute("""
                     INSERT INTO Flight_Attendants
@@ -2322,8 +2274,7 @@ def admin_add_staff():
                     VALUES (?,?,?,?,?,?,?,?,?)
                 """, (
                     worker_id, city, street, house_number,
-                    first_he, last_he, phone, start_date, is_qualified
-                ))
+                    first_he, last_he, phone, start_date, is_qualified))
 
         flash("Staff member added successfully.", "success")
         return redirect(url_for("admin_dashboard"))

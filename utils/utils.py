@@ -12,9 +12,6 @@ def update_flight_statuses_done_if_past(cursor) -> int:
     Mark flights as 'done' if their departure datetime has passed.
     Updates only flights currently in ('active','full').
     Does not touch 'cancelled' or already 'done'.
-
-    Works with DictCursor wrappers that may not have .rowcount.
-    Returns number of updated rows when available, otherwise returns 0.
     """
     cursor.execute("""
         UPDATE Flight
@@ -24,12 +21,7 @@ def update_flight_statuses_done_if_past(cursor) -> int:
                 Departure_Date < DATE('now')
                 OR (
                     Departure_Date = DATE('now')
-                    AND Departure_Time <= TIME('now')
-                )
-          )
-    """)
-
-    # Some cursor wrappers (like DictCursor) don't expose rowcount.
+                    AND Departure_Time <= TIME('now')))""")
     try:
         return int(getattr(cursor, "rowcount"))
     except Exception:
@@ -58,8 +50,7 @@ class RegisteredClient(Unidentified_Guests):
         passport_id,
         birth_date,
         password,
-        phone_numbers=None,
-    ):
+        phone_numbers=None,):
         super().__init__(email_address, first_name_in_english, last_name_in_english, phone_numbers)
         self.passport_id = passport_id
         self.birth_date = birth_date
@@ -80,8 +71,7 @@ class Workers(ABC):
         address_city,
         address_street,
         address_number,
-        start_date,
-    ):
+        start_date,):
         self.worker_id = worker_id
         self.first_name_in_hebrew = first_name_in_hebrew
         self.last_name_in_hebrew = last_name_in_hebrew
@@ -108,8 +98,7 @@ class Managers(Workers):
         start_date,
         first_name_in_english,
         last_name_in_english,
-        password,
-    ):
+        password,):
         super().__init__(
             worker_id,
             first_name_in_hebrew,
@@ -118,8 +107,7 @@ class Managers(Workers):
             address_city,
             address_street,
             address_number,
-            start_date,
-        )
+            start_date,)
         self.first_name_in_english = first_name_in_english
         self.last_name_in_english = last_name_in_english
         self.password = password
@@ -139,8 +127,7 @@ class Pilots(Workers):
         address_street,
         address_number,
         start_date,
-        is_long_flight_qualified,
-    ):
+        is_long_flight_qualified,):
         super().__init__(
             worker_id,
             first_name_in_hebrew,
@@ -149,8 +136,7 @@ class Pilots(Workers):
             address_city,
             address_street,
             address_number,
-            start_date,
-        )
+            start_date,)
         self.is_long_flight_qualified = bool(is_long_flight_qualified)
 
 
@@ -165,8 +151,7 @@ class FlightAttendants(Workers):
         address_street,
         address_number,
         start_date,
-        is_long_flight_qualified,
-    ):
+        is_long_flight_qualified,):
         super().__init__(
             worker_id,
             first_name_in_hebrew,
@@ -175,8 +160,7 @@ class FlightAttendants(Workers):
             address_city,
             address_street,
             address_number,
-            start_date,
-        )
+            start_date,)
         self.is_long_flight_qualified = bool(is_long_flight_qualified)
 
 
@@ -209,8 +193,7 @@ class Seat(ABC):
             isinstance(other, Seat)
             and self.row_number == other.row_number
             and self.column_number == other.column_number
-            and self.seat_type == other.seat_type
-        )
+            and self.seat_type == other.seat_type)
 
     def __hash__(self):
         return hash((self.row_number, self.column_number, self.seat_type))
@@ -272,8 +255,7 @@ class Flight:
         duration_minutes,
         economy_price,
         business_price,
-        status="active",
-    ):
+        status="active",):
         status = (status or "").strip().lower()
         if status not in FLIGHT_STATUSES:
             raise ValueError(f"Invalid flight status: {status}")
@@ -455,15 +437,13 @@ def get_route_duration_minutes(cursor, origin_id, dest_id):
         FROM Routes
         WHERE Origin_Airport = ? AND Destination_Airport = ?
         """,
-        (origin_id, dest_id),
-    )
+        (origin_id, dest_id),)
     row = cursor.fetchone()
     if not row:
         return None
 
     dur = row["Duration"]
 
-    # SQLite / MySQL TIME can come as timedelta or string "HH:MM:SS"
     if isinstance(dur, timedelta):
         return int(dur.total_seconds() // 60)
 
@@ -507,8 +487,7 @@ def plane_is_large(cursor, plane_id: int) -> bool:
           AND LOWER(Class) = 'business'
         LIMIT 1
         """,
-        (plane_id,),
-    )
+        (plane_id,),)
     return cursor.fetchone() is not None
 
 
@@ -518,7 +497,6 @@ def plane_size_label(cursor, plane_id: int) -> str:
 
 # -----------------------------
 # Availability (NO overlaps)
-# Uses NOT EXISTS in SQL (stable)
 # window_start_str/window_end_str are "YYYY-mm-dd HH:MM:SS"
 # -----------------------------
 
@@ -562,7 +540,6 @@ def available_planes(cursor, window_start_str: str, window_end_str: str, is_long
 
 
 def _plane_has_business_from_cached(cursor, plane_id):
-    # small helper; avoids writing twice
     cursor.execute(
         """
         SELECT 1
@@ -595,8 +572,7 @@ def available_pilots(cursor, window_start_str: str, window_end_str: str, require
           )
         ORDER BY p.Worker_ID
         """,
-        (1 if require_long_qualified else 0, window_start_str, window_end_str),
-    )
+        (1 if require_long_qualified else 0, window_start_str, window_end_str),)
     return cursor.fetchall() or []
 
 
@@ -621,8 +597,7 @@ def available_attendants(cursor, window_start_str: str, window_end_str: str, req
           )
         ORDER BY a.Worker_ID
         """,
-        (1 if require_long_qualified else 0, window_start_str, window_end_str),
-    )
+        (1 if require_long_qualified else 0, window_start_str, window_end_str),)
     return cursor.fetchall() or []
 
 
@@ -641,14 +616,12 @@ def parse_dt_flexible(value):
     if not s:
         raise ValueError("Empty datetime string")
 
-    # Try with seconds first, then without seconds
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
         try:
             return datetime.strptime(s, fmt)
         except ValueError:
             pass
 
-    # If there are extra parts, trim to seconds length
     if len(s) >= 19:
         try:
             return datetime.strptime(s[:19], "%Y-%m-%d %H:%M:%S")

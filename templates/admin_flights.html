@@ -93,7 +93,7 @@
             <td class="td-right">{{ f.Business_Price }}</td>
             <td><span class="badge">{{ f.Flight_Status }}</span></td>
             <td>
-              {% if f.Flight_Status != 'cancelled' %}
+              {% if f.Flight_Status in ['active', 'full'] %}
                 <a class="btn btn-secondary btn-small" href="{{ url_for('admin_cancel_flight_confirm', flight_id=f.Flight_ID) }}">Cancel</a>
               {% else %}
                 -

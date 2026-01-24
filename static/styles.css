@@ -1,4 +1,9 @@
-/* ====== Base ====== */
+/* =========================
+   FLYTAU — CLEAN MASTER CSS
+   (no duplicates / stable)
+   ========================= */
+
+/* ====== Base Tokens ====== */
 :root {
   --bg: #f3f8ff;
   --card: #ffffff;
@@ -14,14 +19,14 @@
   --shadow: 0 10px 30px rgba(11, 27, 43, 0.12);
   --radius: 18px;
 
-  /* glass tokens */
+  /* glass tokens (still used in some cards) */
   --glass: rgba(255, 255, 255, 0.45);
   --glass-strong: rgba(255, 255, 255, 0.70);
   --glass-border: rgba(255, 255, 255, 0.55);
   --glass-shadow: 0 18px 60px rgba(11, 27, 43, 0.14);
   --glass-blur: 14px;
 
-  /* subtle lines used in “polish pack” stuff */
+  /* subtle lines */
   --line: rgba(11, 27, 43, 0.10);
   --line-2: rgba(11, 27, 43, 0.07);
   --surface-2: rgba(255, 255, 255, 0.92);
@@ -30,7 +35,7 @@
   --radius-xl: 24px;
 }
 
-/* ✅ small but important: prevents width/border calculations from "sticking" */
+/* ====== Reset / Box sizing ====== */
 *,
 *::before,
 *::after {
@@ -45,10 +50,20 @@ body {
   color: var(--text);
   font-family: "David", "Segoe UI", Arial, sans-serif;
 
-  /* ✅ background image (clouds) */
+  /* background image */
   background: url("/static/images/clouds5.png") center top / cover no-repeat fixed;
+
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* default h1 (hero) */
+h1 {
+  margin: 0 0 12px 0;
+  font-size: 38px;
+  letter-spacing: -0.6px;
+  line-height: 1.05;
+  text-shadow: 0 10px 30px rgba(11, 27, 43, 0.14);
 }
 
 /* ====== Top Bar ====== */
@@ -60,6 +75,7 @@ body {
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
   box-shadow: 0 10px 26px rgba(11, 27, 43, 0.06);
+  z-index: 50;
 }
 
 .topbar-inner {
@@ -130,7 +146,6 @@ body {
   justify-content: center;
 }
 
-/* ✅ IMPORTANT: hero-card is NO LONGER a white big frame */
 .hero-card {
   width: min(720px, 100%);
   background: transparent;
@@ -139,22 +154,18 @@ body {
   padding: 0;
 }
 
-/* Titles readable on clouds */
-h1 {
-  margin: 0 0 12px 0;
-  font-size: 38px;
-  letter-spacing: -0.6px;
-  line-height: 1.05;
-  text-shadow: 0 10px 30px rgba(11, 27, 43, 0.14);
+.hero-card--wide {
+  width: min(980px, 100%);
 }
 
+/* Subtitle (default) */
 .subtitle {
   margin: 0 0 18px 0;
   color: var(--muted);
   font-size: 16px;
   line-height: 1.45;
 
-  /* small glass pill behind subtitle */
+  /* small glass pill behind subtitle (nice for other pages) */
   background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
@@ -207,6 +218,12 @@ h1 {
   transform: translateY(-1px);
 }
 
+.btn-small {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 900;
+}
+
 /* ====== Footer Hint ====== */
 .hint {
   margin-top: 20px;
@@ -224,53 +241,66 @@ h1 {
   text-decoration: underline;
 }
 
-/* ===== Home Search + Results ===== */
-.hero-card--wide {
-  width: min(980px, 100%);
-}
-
-/* ✅ Search is the “floating glass” element */
+/* ====== Home Search – CLEAN FLOATING (matches screenshot) ====== */
+/* Search container is clean (no card look) */
 .search-card {
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  padding: 20px;
-  margin: 18px 0;
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  box-shadow: var(--glass-shadow);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin-top: 28px;
 }
 
+/* Title/Sub for hero card (no subtitle bubble here) */
+.hero-card h1 {
+  margin-bottom: 6px;
+  text-shadow: 0 10px 28px rgba(11, 27, 43, 0.12);
+}
+
+.hero-card .subtitle {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0 26px 0;
+  color: rgba(11, 27, 43, 0.65);
+  font-weight: 600;
+}
+
+/* One-row layout: From / To / Date / Button (4 columns) */
 .search-grid {
   display: grid;
-  grid-template-columns: 1.1fr 1.1fr 0.9fr 0.9fr;
-  gap: 12px;
-  column-gap: 16px;
-  row-gap: 12px;
+  grid-template-columns: 1.1fr 1.1fr 0.9fr 1fr;
+  gap: 16px;
   align-items: end;
 }
 
+/* Labels */
 .field label {
   display: block;
-  margin: 0 0 8px 0;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 800;
+  margin: 0 0 6px 0;
 }
 
-select,
-.search-card input[type="date"] {
+/* Controls */
+.search-grid select,
+.search-grid input[type="date"] {
   width: 100%;
-  padding: 14px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(11, 27, 43, 0.10);
-  background: var(--glass-strong);
+  height: 52px;              /* consistent height */
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(11, 27, 43, 0.12);
+  background: rgba(255, 255, 255, 0.75);
   font-size: 16px;
   outline: none;
   background-clip: padding-box;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
-select:focus,
-.search-card input[type="date"]:focus {
+.search-grid select:focus,
+.search-grid input[type="date"]:focus {
   box-shadow: var(--focus);
   border-color: rgba(26, 163, 255, 0.55);
 }
@@ -285,12 +315,38 @@ select:focus,
   cursor: pointer;
 }
 
-/* ====== Table ====== */
+/* Search button style (pill) */
+.search-btn.btn-primary {
+  height: 52px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #4fa3e3, #7cc8ff);
+  box-shadow: 0 14px 34px rgba(79, 163, 227, 0.28);
+  font-weight: 800;
+}
+
+.search-btn.btn-primary:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+  box-shadow: 0 18px 42px rgba(79, 163, 227, 0.34);
+}
+
+/* If you use “Order Management” button under the search,
+   apply spacing only there (prevents global .btn-secondary change) */
+.cta-row--below {
+  margin-top: 18px;
+}
+
+.cta-row--below .btn-secondary {
+  margin-top: 22px;
+  border-radius: 999px;
+}
+
+/* ====== Table (results) ====== */
 .table-card {
-  background: rgba(255,255,255,0.92);
+  background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
-  box-shadow: 0 14px 40px rgba(11,27,43,0.10);
+  box-shadow: 0 14px 40px rgba(11, 27, 43, 0.10);
   padding: 18px;
   margin-top: 12px;
   backdrop-filter: blur(10px);
@@ -361,12 +417,6 @@ select:focus,
   color: #198754;
 }
 
-.btn-small {
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-weight: 900;
-}
-
 .empty {
   text-align: center;
   padding: 26px 10px;
@@ -379,18 +429,18 @@ select:focus,
   margin-bottom: 6px;
 }
 
-.cta-row--below {
-  margin-top: 18px;
-}
-
-/* responsive */
+/* ====== Responsive (Home search) ====== */
 @media (max-width: 900px) {
   .search-grid {
     grid-template-columns: 1fr;
   }
+
+  .search-btn.btn-primary {
+    width: 100%;
+  }
 }
 
-/* ====== Auth (Login/Register cards) ====== */
+/* ====== Auth (legacy) — centered page + card ====== */
 .page {
   min-height: 100vh;
   display: flex;
@@ -404,7 +454,7 @@ select:focus,
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
-  box-shadow: 0 14px 40px rgba(11,27,43,0.10);
+  box-shadow: 0 14px 40px rgba(11, 27, 43, 0.10);
   padding: 28px;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -423,6 +473,7 @@ select:focus,
 
 .form { display: grid; gap: 10px; }
 
+/* generic form label/input (non-search) */
 label {
   font-weight: 700;
   color: var(--text);
@@ -432,10 +483,10 @@ label {
 input {
   padding: 12px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(11,27,43,0.12);
+  border: 1px solid rgba(11, 27, 43, 0.12);
   outline: none;
   font-size: 15px;
-  background: rgba(255,255,255,0.85);
+  background: rgba(255, 255, 255, 0.85);
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
@@ -452,7 +503,7 @@ input:focus {
   background: rgba(26, 163, 255, 0.08);
   color: var(--text);
   font-weight: 700;
-  box-shadow: 0 10px 18px rgba(11,27,43,0.06);
+  box-shadow: 0 10px 18px rgba(11, 27, 43, 0.06);
 }
 
 .alert.error { background: rgba(220, 53, 69, 0.10); }
@@ -465,7 +516,7 @@ input:focus {
   font-weight: 700;
 }
 
-/* ===== Auth pages (Login/Register) ===== */
+/* ====== Auth pages (newer) ====== */
 .auth-page {
   min-height: calc(100vh - 84px);
   display: flex;
@@ -479,7 +530,7 @@ input:focus {
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
-  box-shadow: 0 14px 40px rgba(11,27,43,0.10);
+  box-shadow: 0 14px 40px rgba(11, 27, 43, 0.10);
   padding: 32px 34px;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -513,10 +564,10 @@ input:focus {
   width: 100%;
   padding: 14px 14px;
   border-radius: 14px;
-  border: 1px solid rgba(11,27,43,0.12);
+  border: 1px solid rgba(11, 27, 43, 0.12);
   outline: none;
   font-size: 16px;
-  background: rgba(255,255,255,0.85);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .auth-form input:focus {
@@ -545,7 +596,7 @@ input:focus {
   letter-spacing: 0.8px;
 }
 
-/* ===== Return to Home link ===== */
+/* ====== Return to Home link ====== */
 .back-home {
   display: inline-block;
   margin-bottom: 18px;
@@ -560,12 +611,12 @@ input:focus {
   transform: translateX(-2px);
 }
 
-/* ===== Role picker (Login Client/Admin) ===== */
+/* ====== Role picker (Login Client/Admin) ====== */
 .role-picker {
-  border: 1px solid rgba(11,27,43,0.10);
+  border: 1px solid rgba(11, 27, 43, 0.10);
   border-radius: 14px;
   padding: 14px 14px;
-  background: rgba(255,255,255,0.55);
+  background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   margin-bottom: 10px;
@@ -610,131 +661,19 @@ input:focus {
   text-decoration: underline;
 }
 
-/* (optional) kill any leftover “bars/lines” */
+/* Optional: hide leftovers */
 .cabin-rule { display: none; }
 progress { display: none; }
 
-/* =========================================
-   CLEAN FLOATING SEARCH – FINAL VERSION
-   ========================================= */
-
-/* 1) Remove any remaining card/container look */
-.search-card {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  margin-top: 28px;
-}
-
-/* 2) Title + subtitle clean (no bubble) */
-.hero-card h1 {
-  margin-bottom: 6px;
-  text-shadow: 0 10px 28px rgba(11,27,43,.12);
-}
-
-.hero-card .subtitle {
-  background: none !important;
-  border: none !important;
-  padding: 0 !important;
-  margin-bottom: 26px;
-  color: rgba(11,27,43,.65);
-  font-weight: 600;
-}
-
-/* 3) One-row layout: From / To / Dates / Button */
-.search-grid {
-  display: grid;
-  grid-template-columns: 1.1fr 1.1fr 0.9fr 0.9fr 1fr;
-  gap: 16px;
-  align-items: end;
-}
-
-/* 4) Make labels align visually */
-.field label {
-  font-size: 14px;
-  font-weight: 800;
-  margin-bottom: 6px;
-}
-
-/* 5) Inputs – floating but subtle */
-.search-grid select,
-.search-grid input[type="date"] {
-  background: rgba(255,255,255,.75);
-  border: 1px solid rgba(11,27,43,.12);
-  border-radius: 16px;
-  padding: 14px 16px;
-  font-size: 16px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-/* 6) Search button – same height, soft sky tone */
-.search-btn.btn-primary {
-  height: 52px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #4fa3e3, #7cc8ff);
-  box-shadow: 0 14px 34px rgba(79,163,227,.28);
-  font-weight: 800;
-}
-
-/* Hover – gentle */
-.search-btn.btn-primary:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.04);
-  box-shadow: 0 18px 42px rgba(79,163,227,.34);
-}
-
-/* 7) Order Management button floats too */
-.btn-secondary {
-  margin-top: 22px;
-  background: rgba(255,255,255,.65);
-  backdrop-filter: blur(10px);
-  border-radius: 999px;
-  box-shadow: 0 14px 34px rgba(11,27,43,.12);
-}
-
-/* 8) Mobile – stack nicely */
-@media (max-width: 900px) {
-  .search-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .search-btn.btn-primary {
-    width: 100%;
-  }
-}
-
-/* === ALIGN From/To with Dates (paste at very end) === */
-
-/* same height for ALL controls in the search row */
-.search-grid select,
-.search-grid input[type="date"]{
-  height: 52px;                 /* <-- makes From/To same height as dates */
-  line-height: 52px;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-/* keep the label height consistent too */
-.search-grid .field label{
-  min-height: 20px;
-  margin-bottom: 8px;
-}
-
-/* ensure the column aligns at the bottom of controls */
-.search-grid{
-  align-items: end;
-}
-
+/* ====== Extra button style you added ====== */
 .btn-primary-blue {
-  background: #4da3ff;        /* כחול כמו Back אבל צבע */
+  background: #4da3ff;
   color: #ffffff;
   border: none;
-  border-radius: 999px;       /* בדיוק כמו Back */
+  border-radius: 999px;
   padding: 10px 22px;
   font-weight: 600;
-  box-shadow: none;           /* ❌ בלי רקע שחור / צל */
+  box-shadow: none;
   transition: background 0.2s ease, transform 0.1s ease;
 }
 
