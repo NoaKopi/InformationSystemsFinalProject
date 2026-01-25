@@ -31,6 +31,37 @@ The project uses **SQLite** as the database engine.
 
 ---
 
+## User Features
+
+The system supports two types of customers: **Unidentified Guests** and **Registered Users**.
+
+### Unidentified Guests
+Unidentified Guests can use the system without creating an account.
+
+Unidentified Guests can:
+- Search for available flights by origin, destination, departuer date
+- View flight details and seat availability, devided by class
+- Book flight tickets and select seats
+- Complete an order using an email address 
+- View active orders using order ID and email
+- Cancel active orders according to the system cancellation policy
+
+### Registered Users
+Registered users create an account and log in using their email and password.
+
+Registered users can do all the actions Unidentified Guests can, and in addition:
+- View full order history, including completed and cancelled orders
+- Automatically use saved personal details when placing new orders
+
+During registration, the system stores:
+- Passport ID
+- Full name (in English)
+- Date of birth
+- Email and password
+- Registration date
+
+---
+
 ## Admin Features
 - View and filter flights by origin, destination, date, and status
 - Automatic update of flight status to `done` when departure time has passed
